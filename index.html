@@ -223,7 +223,7 @@ function mStyle(id){const s=Math.floor(id/4),k=id%4,col=k%2,row=Math.floor(k/2),
  return `background-image:url(atl/m${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
 function zoomStyle(id){const s=Math.floor(id/4),k=id%4,col=k%2,row=Math.floor(k/2);const n=Math.min(4,CARDS.length-s*4),rows=Math.ceil(n/2);
  const ts=Math.floor(id/100),tk=id%100,tc=tk%10,tr=Math.floor(tk/10),tn=Math.min(100,CARDS.length-ts*100),trs=Math.ceil(tn/10);
- return `background-image:url(atl/y${s}.webp),url(atl/m${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
+ return `background-image:url(atl/y${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
 const zq=[],zdone=new Set();let zrun=0;
 function queueZoom(ids,front){if(IS_NODE)return;const ss=[...new Set(ids.map(i=>Math.floor(i/4)))].filter(x=>!zdone.has(x));
  for(const x of ss){zdone.add(x);front?zq.unshift(x):zq.push(x)}zpump()}
@@ -679,14 +679,13 @@ function lodScan(){if(IS_NODE)return;try{if(lodIO)lodIO.disconnect();const els=d
  els.forEach(e=>{if(e.dataset.m==='1')e.dataset.m='0';lodIO.observe(e)})}catch(e){}}
 function vMenu(){const n=ui.B.deck.length;
  return `<div class="center"><div class="kick">DUEL</div><h1>Playtest</h1><div class="muted">${CARDS.length} cards · ${OKP().length} with working effects</div>
-  <button class="pri" style="width:240px" data-act="quick">Quick play (random deck)</button>
+ <button class="pri" style="width:240px" data-act="quick">Quick play (random deck)</button>
  <button class="out" style="width:240px" data-act="tutorial">Tutorial · learn to play</button>
  <button style="width:240px" data-act="mydeck" ${n===40?'':'disabled'}>Play with my deck (${n}/40)</button>
  <button style="width:240px" data-act="builder">Deck builder</button>
  <button style="width:240px" data-act="rules">Rules summary</button>
  <button style="width:240px" data-act="cuts">Cut-in animations: ${ui.cut?'On':'Off'}</button>
- ${installable()?'<button class="pri" style="width:240px;background:#5fd0a0;color:#06251a" data-act="install">⬇ Download app (install)</button>':''}
-</div>`}
+ ${installable()?'<button class="out" style="width:240px" data-act="install">Install as app</button>':''}</div>`}
 let deferredInstall=null;
 const isStandalone=()=>{try{return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}};
 const installable=()=>!IS_NODE&&!isStandalone()&&location.protocol.startsWith('http')&&!!document.querySelector('link[rel=manifest]');
