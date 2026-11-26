@@ -86,7 +86,8 @@ input[type=search]{width:100%;background:var(--panel);color:var(--fg);border:1px
 p{margin:6px 0}
 /* stage board */
 #app.g{padding:0;background:var(--bg)}
-#stagewrap{touch-action:none;position:fixed;inset:0;background:var(--bg);overflow:hidden}
+#stagewrap{touch-action:none;position:fixed;inset:0;background:linear-gradient(#0a0f1ccc,#0a0f1ccc),url(atl/bg.webp) center/cover,var(--bg);overflow:hidden}
+#fsb{position:fixed;top:max(8px,env(safe-area-inset-top,0px));right:max(8px,env(safe-area-inset-right,0px));width:40px;height:40px;border-radius:10px;border:2px solid #6b5320;background:#0a1226cc;color:#ffe39a;display:flex;align-items:center;justify-content:center;font-size:20px;z-index:25;cursor:pointer}
 #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;background:var(--bg);font-family:Inter,system-ui,sans-serif}
 #shk{position:absolute;inset:0}
 #hud{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:20;pointer-events:none;transform:translateZ(0)}#hud .pan,#hud .rc{pointer-events:auto}
@@ -223,7 +224,7 @@ function mStyle(id){const s=Math.floor(id/4),k=id%4,col=k%2,row=Math.floor(k/2),
  return `background-image:url(atl/m${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
 function zoomStyle(id){const s=Math.floor(id/4),k=id%4,col=k%2,row=Math.floor(k/2);const n=Math.min(4,CARDS.length-s*4),rows=Math.ceil(n/2);
  const ts=Math.floor(id/100),tk=id%100,tc=tk%10,tr=Math.floor(tk/10),tn=Math.min(100,CARDS.length-ts*100),trs=Math.ceil(tn/10);
- return `background-image:url(atl/y${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
+ return `background-image:url(atl/y${s}.webp),url(atl/m${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
 const zq=[],zdone=new Set();let zrun=0;
 function queueZoom(ids,front){if(IS_NODE)return;const ss=[...new Set(ids.map(i=>Math.floor(i/4)))].filter(x=>!zdone.has(x));
  for(const x of ss){zdone.add(x);front?zq.unshift(x):zq.push(x)}zpump()}
@@ -679,13 +680,19 @@ function lodScan(){if(IS_NODE)return;try{if(lodIO)lodIO.disconnect();const els=d
  els.forEach(e=>{if(e.dataset.m==='1')e.dataset.m='0';lodIO.observe(e)})}catch(e){}}
 function vMenu(){const n=ui.B.deck.length;
  return `<div class="center"><div class="kick">DUEL</div><h1>Playtest</h1><div class="muted">${CARDS.length} cards · ${OKP().length} with working effects</div>
- <button class="pri" style="width:240px" data-act="quick">Quick play (random deck)</button>
+  <button class="pri" style="width:240px" data-act="quick">Quick play (random deck)</button>
  <button class="out" style="width:240px" data-act="tutorial">Tutorial · learn to play</button>
  <button style="width:240px" data-act="mydeck" ${n===40?'':'disabled'}>Play with my deck (${n}/40)</button>
  <button style="width:240px" data-act="builder">Deck builder</button>
  <button style="width:240px" data-act="rules">Rules summary</button>
+ ${!IS_NODE&&(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen)&&!isStandalone()?'<button style="width:240px" data-act="fs">Full screen</button>':''}
  <button style="width:240px" data-act="cuts">Cut-in animations: ${ui.cut?'On':'Off'}</button>
- ${installable()?'<button class="out" style="width:240px" data-act="install">Install as app</button>':''}</div>`}
+ ${installable()?'<button class="pri" style="width:240px;background:#5fd0a0;color:#06251a" data-act="install">⬇ Download app (install)</button>':''}
+</div>`}
+const canFs=()=>!IS_NODE&&!!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen)&&!isStandalone();
+async function toggleFs(){try{const d=document,e=d.documentElement;if(d.fullscreenElement||d.webkitFullscreenElement){await(d.exitFullscreen||d.webkitExitFullscreen).call(d)}
+ else{await(e.requestFullscreen||e.webkitRequestFullscreen).call(e);try{await screen.orientation.lock('landscape')}catch(x){}}}catch(x){}}
+if(!IS_NODE)document.addEventListener('fullscreenchange',()=>{try{boardFit();if(ui.screen==='menu'||ui.screen==='game')ui.render()}catch(x){}});
 let deferredInstall=null;
 const isStandalone=()=>{try{return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}};
 const installable=()=>!IS_NODE&&!isStandalone()&&location.protocol.startsWith('http')&&!!document.querySelector('link[rel=manifest]');
@@ -713,7 +720,7 @@ function boardBuild(){const a=document.getElementById('app');a.className='g';
  const piles=zh+[[185,1],[840,0]].map(([y,pi])=>`<div class="dash ${pi?'bl':'go'}" data-act="zone" data-z="gy" data-o="${pi}" style="left:${1470-60}px;top:${y-84}px;width:120px;height:168px;cursor:pointer"></div>`+
   [4,2,0].map(o=>`<div class="bc stat" style="transform:translate(${1330+o-100}px,${y+o-140}px) scale(.6)"><div class="bback"></div></div>`).join('')+
   `<div class="lbl" id="dk${pi}" style="left:${1330-60}px;top:${y+92}px;width:120px"></div>`).join('');
- a.innerHTML=`<div id="stagewrap"><div id="stage"><div id="shk"><div id="world">
+ a.innerHTML=`<div id="stagewrap">${canFs()?'<div id="fsb" data-act="fs">⛶</div>':''}<div id="stage"><div id="shk"><div id="world">
   <div class="ringd" style="left:${960-170}px;top:${540-170}px;width:340px;height:340px"></div><div class="ringd n" style="left:${960-110}px;top:${540-110}px;width:220px;height:220px"></div>
   <div class="cline"></div>${slots}${piles}<div id="cards"></div>
   <div class="avatar" id="pn1" style="opacity:0;pointer-events:none;left:${960-45}px;top:${58-45}px">K</div></div></div>
@@ -845,6 +852,7 @@ async function onAct(act,el){const d=el.dataset,B=ui.B,me=G&&G.p[0];
  case 'builder':loadDeck();ui.screen='builder';ui.render();break;
  case 'cuts':ui.cut=!ui.cut;try{localStorage.setItem('dm_cut',ui.cut?'1':'0')}catch(e){}ui.render();break;
  case 'rules':ui.ov={t:'rules'};ui.render();break;
+ case 'fs':await toggleFs();break;
  case 'install':{if(deferredInstall){deferredInstall.prompt();try{await deferredInstall.userChoice}catch(e){}deferredInstall=null;ui.render()}
   else{ui.ov={t:'installhelp'};ui.render()}break}
  case 'close':ui.ov=null;ui.render();break;
