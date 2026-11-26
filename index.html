@@ -1,5 +1,6 @@
 <meta charset="utf-8"><title>Duel Playtest</title>
 <meta name="claude:viewport-fit-sides" content="cover">
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#1a1a24"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
 <style>
 :root{--bg:#161826;--panel:#232532;--panel2:#1d1f2c;--fg:#e9e9ed;--mut:#9397ab;--acc:#9184d9;--bad:#e5484d;--line:#3f424d;--sec:#262a60;--secg:#353b80;--ghost:#4c5397;
@@ -16,6 +17,7 @@ button.bad{background:#3a1d22;border-color:#6a2a31}
 button:disabled{opacity:.35}
 h1{font-size:30px;margin:0;font-weight:500;letter-spacing:-.025em}h2{font-size:16px;margin:0;font-weight:500}
 .kick{font-size:11px;letter-spacing:.3em;color:var(--a300);font-weight:500}
+#app[data-short] .center{display:grid;grid-template-columns:repeat(2,240px);justify-content:center;align-content:center;gap:8px 12px}#app[data-short] .center>.kick,#app[data-short] .center>h1,#app[data-short] .center>.muted{grid-column:1/-1}#app[data-short] .center h1{font-size:30px;margin:0}#app[data-short] .center button{margin:0}
 .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
 .card{background-repeat:no-repeat;background-color:#0b0d13;border-radius:6%/4.3%;aspect-ratio:403/560}
 .slot{position:relative;flex:none;width:var(--cw);height:var(--ch);transition:width .15s}
@@ -221,7 +223,7 @@ function mStyle(id){const s=Math.floor(id/4),k=id%4,col=k%2,row=Math.floor(k/2),
  return `background-image:url(atl/m${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
 function zoomStyle(id){const s=Math.floor(id/4),k=id%4,col=k%2,row=Math.floor(k/2);const n=Math.min(4,CARDS.length-s*4),rows=Math.ceil(n/2);
  const ts=Math.floor(id/100),tk=id%100,tc=tk%10,tr=Math.floor(tk/10),tn=Math.min(100,CARDS.length-ts*100),trs=Math.ceil(tn/10);
- return `background-image:url(atl/y${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
+ return `background-image:url(atl/y${s}.webp),url(atl/m${s}.webp),url(atl/t${ts}.webp);background-size:200% ${rows*100}%,200% ${rows*100}%,1000% ${trs*100}%;background-position:${col*100}% ${rows>1?row/(rows-1)*100:0}%,${col*100}% ${rows>1?row/(rows-1)*100:0}%,${tc/9*100}% ${trs>1?tr/(trs-1)*100:0}%`}
 const zq=[],zdone=new Set();let zrun=0;
 function queueZoom(ids,front){if(IS_NODE)return;const ss=[...new Set(ids.map(i=>Math.floor(i/4)))].filter(x=>!zdone.has(x));
  for(const x of ss){zdone.add(x);front?zq.unshift(x):zq.push(x)}zpump()}
@@ -677,12 +679,20 @@ function lodScan(){if(IS_NODE)return;try{if(lodIO)lodIO.disconnect();const els=d
  els.forEach(e=>{if(e.dataset.m==='1')e.dataset.m='0';lodIO.observe(e)})}catch(e){}}
 function vMenu(){const n=ui.B.deck.length;
  return `<div class="center"><div class="kick">DUEL</div><h1>Playtest</h1><div class="muted">${CARDS.length} cards · ${OKP().length} with working effects</div>
- <button class="pri" style="width:240px" data-act="quick">Quick play (random deck)</button>
+  <button class="pri" style="width:240px" data-act="quick">Quick play (random deck)</button>
  <button class="out" style="width:240px" data-act="tutorial">Tutorial · learn to play</button>
  <button style="width:240px" data-act="mydeck" ${n===40?'':'disabled'}>Play with my deck (${n}/40)</button>
  <button style="width:240px" data-act="builder">Deck builder</button>
  <button style="width:240px" data-act="rules">Rules summary</button>
- <button style="width:240px" data-act="cuts">Cut-in animations: ${ui.cut?'On':'Off'}</button></div>`}
+ <button style="width:240px" data-act="cuts">Cut-in animations: ${ui.cut?'On':'Off'}</button>
+ ${installable()?'<button class="pri" style="width:240px;background:#5fd0a0;color:#06251a" data-act="install">⬇ Download app (install)</button>':''}
+</div>`}
+let deferredInstall=null;
+const isStandalone=()=>{try{return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}};
+const installable=()=>!IS_NODE&&!isStandalone()&&location.protocol.startsWith('http')&&!!document.querySelector('link[rel=manifest]');
+if(!IS_NODE){addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;if(ui.screen==='menu')ui.render()});
+ addEventListener('appinstalled',()=>{deferredInstall=null;if(ui.screen==='menu')ui.render()});
+ if('serviceWorker' in navigator&&location.protocol.startsWith('http'))addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
 function bFiltered(){const B=ui.B,q=B.q.trim().toLowerCase();
  return CARDS.filter(c=>(B.all||c.ok)&&(B.civ==='all'||(B.civ==='M'?c.civ.length>1:c.civ.includes(B.civ)))&&(!q||c.n.toLowerCase().includes(q)||c.race.join(' ').toLowerCase().includes(q)))}
 function vBuilder(){setTimeout(()=>queueZoom(bFiltered().slice(0,8).map(c=>c.id)),50);const B=ui.B,list=bFiltered(),cnt={};B.deck.forEach(i=>cnt[CARDS[i].n]=(cnt[CARDS[i].n]||0)+1);const show=list.slice(0,B.page*60);
@@ -710,9 +720,10 @@ function boardBuild(){const a=document.getElementById('app');a.className='g';
   <div class="avatar" id="pn1" style="opacity:0;pointer-events:none;left:${960-45}px;top:${58-45}px">K</div></div></div>
   <div id="hud"></div><div id="sfx"></div></div></div>`;
  board.hudS=null;board.ss=new Map();board.els.clear();board.pos.clear();board.first=true;board.pre=0;board.cam=[960,540,1];boardFit()}
-function ovFit(){const o=document.getElementById('ov');if(!o)return;const w=innerWidth,h=innerHeight;
- if(ui.screen==='game'&&h>w*1.05){o.className='rotp';o.style.cssText=`position:fixed;left:0;top:0;width:${h}px;height:${w}px;transform-origin:0 0;transform:${board.flip?`translate(0,${h}px) rotate(-90deg)`:`translate(${w}px,0) rotate(90deg)`};z-index:40`}
- else{o.className='';o.style.cssText=''}}
+function ovFit(){const o=document.getElementById('ov');if(!o)return;const w=innerWidth,h=innerHeight,ap=document.getElementById('app'),pt=h>w*1.05,fl=ui.screen==='game'&&board.flip;
+ if(pt){o.className='rotp';o.style.cssText=`position:fixed;left:0;top:0;width:${h}px;height:${w}px;transform-origin:0 0;transform:${fl?`translate(0,${h}px) rotate(-90deg)`:`translate(${w}px,0) rotate(90deg)`};z-index:40`}
+ else{o.className='';o.style.cssText=''}
+ if(ap){ap.toggleAttribute('data-short',(pt?w:h)<520);if(pt&&ui.screen!=='game')ap.style.cssText=`inset:auto;left:0;top:0;width:${h}px;height:${w}px;transform-origin:0 0;transform:translate(${w}px,0) rotate(90deg)`;else ap.style.cssText=''}}
 function boardFit(){ovFit();const st=document.getElementById('stage');if(!st)return;const w=innerWidth,h=innerHeight;
  if(h>w*1.05){const k=Math.min(h/1920,w/1080),f=board.flip;
   st.style.transform=f?`translate(${(w-1080*k)/2}px,${(h+1920*k)/2}px) rotate(-90deg) scale(${k})`:`translate(${(w+1080*k)/2}px,${(h-1920*k)/2}px) rotate(90deg) scale(${k})`;board.k=k}
@@ -798,6 +809,7 @@ function vOv(){const o=ui.ov;if(!o)return vZoom();
   return `<div class="ov"><div class="zbd" data-act="close"></div><div class="sheet zsh"><div class="row"><h2 style="flex:1">${o.o?'Rival':'Your'} ${mn?'mana zone':'graveyard'} · ${arr.length}</h2><button data-act="close">Close</button></div>
   ${arr.length?`<div class="opts">${arr.map(c=>`<div class="opt zc" data-zoom="${c.id}">${cardDiv(c.id)}<span>${ESC(nm(c))}</span>${mn&&c.tapped?'<i class="tg">tapped</i>':''}</div>`).join('')}</div><p class="muted" style="margin-top:8px">Hold a card to zoom.${mn?'':' Newest first.'}</p>`:'<p class="muted" style="margin-top:12px">Empty</p>'}</div></div>`}
  if(o.t==='log')return `<div class="ov" data-act="close"><div class="sheet"><div class="kick" style="margin-bottom:8px">DUEL LOG</div>${G.log.slice().reverse().map(l=>`<div class="li"><span class="n">${ESC(l)}</span></div>`).join('')}</div></div>`
+ if(o.t==='installhelp')return `<div class="ov" data-act="close"><div class="sheet"><h2>Install as app</h2><p><b>iPhone / iPad (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</p><p><b>Android (Chrome):</b> open the ⋮ menu, then <b>Install app</b> (or <b>Add to Home screen</b>).</p><p>The installed app opens full-screen and keeps cards cached for offline play after the first load.</p><div class="row"><button class="pri" data-act="close">OK</button></div></div></div>`
  if(o.t==='rules')return `<div class="ov" data-act="close"><div class="sheet"><h2>Rules (Duel Masters Plays)</h2>
  <p><b>Deck:</b> exactly 40 cards, max 4 copies of the same name. Start with 5 shields and 5 cards in hand. The first player does not draw on their first turn.</p>
  <p><b>Turn order:</b> 1 Draw · 2 Charge mana (once per turn, a card from hand goes to the mana zone) · 3 Play cards · 4 Attack. Mana untaps at the start of your turn.</p>
@@ -834,6 +846,8 @@ async function onAct(act,el){const d=el.dataset,B=ui.B,me=G&&G.p[0];
  case 'builder':loadDeck();ui.screen='builder';ui.render();break;
  case 'cuts':ui.cut=!ui.cut;try{localStorage.setItem('dm_cut',ui.cut?'1':'0')}catch(e){}ui.render();break;
  case 'rules':ui.ov={t:'rules'};ui.render();break;
+ case 'install':{if(deferredInstall){deferredInstall.prompt();try{await deferredInstall.userChoice}catch(e){}deferredInstall=null;ui.render()}
+  else{ui.ov={t:'installhelp'};ui.render()}break}
  case 'close':ui.ov=null;ui.render();break;
  case 'quick':TUT.on=false;beginGame(autoBuild(randomCivs()));break;
  case 'mydeck':TUT.on=false;beginGame(B.deck);break;
