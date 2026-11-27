@@ -291,9 +291,13 @@ function planPay(p,id){const c=CARDS[id],cost=costOf(p,id),un=p.mana.filter(m=>!
 function evoBases(p,id){const c=CARDS[id];if(!c.evo)return [];if(!c.evoRaces)return null;
  return p.bf.filter(b=>crRaces(b).some(r=>c.evoRaces.some(e=>e[0]==='~'?r.toLowerCase().includes(e.slice(1).toLowerCase()):(r.toLowerCase()===e.toLowerCase()||r.toLowerCase()===e.toLowerCase()+'s'))))}
 function castBlocked(c){return c.t==='spell'&&G.p.some(q=>q.bf.some(g=>{const co=C(g).castOnly;return co&&!c.civ.includes(co)}))}
-function castIfBad(p,c){return c.castIf==='oppMoreShields'&&!(G.p[1-p.i].shields.length>p.shields.length)}
+function castIfBad(p,c){const k=c.castIf;if(!k)return false;
+ if(k==='oppMoreShields')return !(G.p[1-p.i].shields.length>p.shields.length);
+ if(k==='allFireMana')return !(p.mana.length&&p.mana.every(m=>C(m).civ.includes('F')));
+ if(k==='spellThisTurn')return !((G.spellCt||[0,0])[p.i]>0);return false}
+const CASTWHY={oppMoreShields:'You can cast this spell only if your opponent has more shields than you do',allFireMana:'You can cast this spell only if all the cards in your mana zone are fire cards',spellThisTurn:'You can summon this creature only if you have cast a spell this turn'};
 function canPlay(p,h){const c=C(h);if(G.cur===p.i&&(G.ph||0)>2)return false;if(castBlocked(c)||castIfBad(p,c))return false;if(!c.evo&&c.t==='creature'&&p.bf.length>=7)return false;if(!planPay(p,h.id))return false;if(c.evo){const b=evoBases(p,h.id);if(!b||!b.length)return false}return true}
-function whyNot(p,h){const c=C(h);if(castIfBad(p,c))return 'You can cast this spell only if your opponent has more shields than you do';if(castBlocked(c))return 'A card in play stops you from casting this spell';if(G.cur===p.i&&(G.ph||0)>2)return 'Too late: you already attacked this turn';
+function whyNot(p,h){const c=C(h);if(castIfBad(p,c))return CASTWHY[c.castIf];if(castBlocked(c))return 'A card in play stops you from casting this spell';if(G.cur===p.i&&(G.ph||0)>2)return 'Too late: you already attacked this turn';
  if(!c.evo&&c.t==='creature'&&p.bf.length>=7)return 'Battle zone is full (7)';
  const un=p.mana.filter(m=>!m.tapped),cost=costOf(p,h.id);if(un.length<cost)return `Need ${cost} untapped mana (you have ${un.length})`;
  for(const civ of c.civ)if(!un.some(m=>C(m).civ.includes(civ)))return `Needs a ${CIVN[civ]} mana card (you have none untapped)`;
@@ -777,6 +781,11 @@ FX.clonedDiscard=async function(p,f){const o=G.p[1-p.i];const k=1+[...p.gy,...o.
  const ch=shuffle(o.hand.slice()).slice(0,k);if(!ch.length)return;
  for(const x of ch)await placeItem(p,{from:'hand',to:'gy'},{x,s:o});
  log(`${o.i?'Opponent':'You'} discarded ${ch.length} card${ch.length>1?'s':''} at random.`);ui.render()};
+
+FX.swapManaHand=async function(p){log('Each player swaps the cards in his mana zone with the cards in his hand.');
+ for(const q of G.p){const oldMana=q.mana.map(m=>({id:m.id,uid:m.uid}));const oldHand=q.hand.slice();q.hand=oldMana;q.mana=[];oldHand.forEach(h=>addMana(q,h,true))}ui.render()};
+FX.mana2hand=async function(p){log('Each player returns all cards from his mana zone to his hand.');
+ for(const q of G.p){const m=q.mana.map(x=>({id:x.id,uid:x.uid}));q.mana=[];q.hand.push(...m)}ui.render()};
 FX.silentTapped=async function(){};
 FX.returnMoved=async function(p,f){const c=G.lastMoved;if(!c)return;const i=p.gy.findIndex(x=>x.uid===c.uid);if(i<0)return;
  if(f.optional){const k=await choose(p,`Return ${nm(c)} to your mana zone?`,[{label:'Return'},{label:'No'}],{ai:()=>0});if(k!==0)return}
@@ -812,7 +821,7 @@ async function makeCreature(p,h,free){const c=C(h);let cr={id:h.id,uid:h.uid,tap
   const base=await pickCr(p,'Evolve which creature?',b,'low');if(!base)return null;
   p.bf.splice(p.bf.indexOf(base),1);cr.under=cardsOf(base);cr.tapped=base.tapped;cr.sick=false;cr.noSick=true;cr.buf=base.buf}
  return cr}
-async function resolveSpell(p,h,trig){log(`${p.i?'Opponent':'You'} cast ${nm(h)}.`);
+async function resolveSpell(p,h,trig){G.spellCt=G.spellCt||[0,0];G.spellCt[p.i]++;log(`${p.i?'Opponent':'You'} cast ${nm(h)}.`);
  await ui.fx('cut',{kind:trig?'SHIELD TRIGGER':'SPELL',id:h.id,title:nm(h),sub:C(h).fx.map(fxTxt).filter(Boolean).join(' ')||kwTxt(C(h)),tone:p.i?'rival':'you'});await runFx(p,C(h).fx,'spell');await castHooks(p);
  if(hasKw(h,'charger')||hasKw(h,'toMana')||hasKw(h,'toManaT')){addMana(p,h,hasKw(h,'toManaT'));log(`${nm(h)} went to the mana zone.`)}else p.gy.push(h)}
 async function castHooks(p){const op=G.p[1-p.i];for(const c of [...op.bf])if(op.bf.includes(c)&&!G.over)await runFx(op,C(c).fx,'oppCast',c);
@@ -884,7 +893,7 @@ async function untapViaMana(p){const tp=p.bf.filter(c=>c.tapped);if(!tp.length||
  const i=await choose(p,'Creatures do not untap. Tap 2 mana cards to untap 1 creature?',opts,{ai:()=>p.mana.length>=7?Math.min(max,1):0});const k=i<0?0:i;if(!k)return;
  for(let j=0;j<k;j++){const l=p.bf.filter(c=>c.tapped);if(!l.length)break;const x=await pickCr(p,'Choose a creature to untap',l,'high',false);if(x){x.tapped=false;log(`${nm(x)} untapped.`)}}
  let n=2*k;for(const m of p.mana){if(n<=0)break;if(!m.tapped){m.tapped=true;n--}}ui.render()}
-async function startTurn(i){if(G.over)return;G.cur=i;G.turnNo++;G.drawn=[0,0];const p=G.p[i];G.civLock=(G.civLock||[]).filter(l=>l.i!==i);for(const q of G.p)q.bf.forEach(c=>{if(c.keepKw){c.keepKw=c.keepKw.filter(e=>e.until!==i);if(!c.keepKw.length)c.keepKw=null}});
+async function startTurn(i){if(G.over)return;G.cur=i;G.turnNo++;G.drawn=[0,0];G.spellCt=[0,0];const p=G.p[i];G.civLock=(G.civLock||[]).filter(l=>l.i!==i);for(const q of G.p)q.bf.forEach(c=>{if(c.keepKw){c.keepKw=c.keepKw.filter(e=>e.until!==i);if(!c.keepKw.length)c.keepKw=null}});
  const keep=[];for(const c of p.bf){if(c.tapped&&hasKw(c,'skill2')&&(p.human&&!AUTO?true:skillWants(p,c))){
    const i=p.human&&!AUTO?await choose(p,`${nm(c)} is tapped. Keep it tapped and use its ability?`,[{id:c.id,label:'Keep tapped & use ability'},{label:'Untap normally'}],{ai:()=>0}):0;
    if(i===0)keep.push(c)}}
@@ -929,6 +938,8 @@ function fxUseful(p,f){const o=G.p[1-p.i];{switch(f.op){
   case 'destroyAll':{const m=[...o.bf].filter(x=>power(x)<=f.maxPower).length,s=p.bf.filter(x=>power(x)<=f.maxPower).length;return m>s}
   case 'bounce':return o.bf.length>0;case 'tap':return f.own==='me'?true:o.bf.some(x=>!x.tapped);case 'buff':return p.bf.length>0;
   case 'peek':return false;
+  case 'swapManaHand':return o.mana.length-o.hand.length>=3&&p.mana.length-p.hand.length<=1;
+  case 'mana2hand':return o.mana.length>=p.mana.length+3;
   case 'grant':return f.own==='opp'?o.bf.length>0:p.bf.length>0;
   case 'move':{if(f.own==='opp'){const arr=zoneArr(o,f.from);return arr.some(x=>cardMatch(x,f.filter,f.from==='bf'))}
    if(f.own==='me'&&(f.from==='gy'||f.from==='mana')&&f.to==='hand')return zoneArr(p,f.from).some(x=>cardMatch(x,f.filter,false));
