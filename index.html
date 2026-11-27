@@ -105,8 +105,8 @@ p{margin:6px 0}
 .bi{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .5s}
 .bface,.bback{position:absolute;inset:0;border-radius:6%/4.3%;backface-visibility:hidden;-webkit-backface-visibility:hidden;box-shadow:0 12px 28px #000a}
 .bface{background-color:#0b0d13}
-.shp{background:url(atl/back.webp) center/calc(100% - 88px) 100% no-repeat}
-.bback{transform:rotateY(180deg);background:url(atl/back.webp) center/calc(100% - 88px) 100% no-repeat;box-shadow:0 12px 28px #000a}
+.shp{background:url(atl/back.webp) center/100% 100% no-repeat}
+.bback{transform:rotateY(180deg);background:url(atl/back.webp) center/100% 100% no-repeat;box-shadow:0 12px 28px #000a}
 .bc.stat .bback{transform:none}
 .bc.hit{cursor:pointer}.bc.cant .bface{filter:brightness(.6) saturate(.55)}.bc.tgt .bface,.bc.tgt .bback{box-shadow:0 0 0 5px #ff5a5a,0 0 60px #ff3b30!important}.dragging{cursor:grabbing}.bc.zbf .bface{box-shadow:0 0 22px var(--g),0 12px 28px #000a}.bc.sel .bface{box-shadow:0 0 0 4px var(--g),0 0 60px var(--g)}
 .rb{--g:#fff}.bc.zbf.rb .bface{box-shadow:-10px -10px 26px #ff3b30aa,10px -10px 26px #ffd53daa,10px 10px 26px #34c759aa,-10px 10px 26px #5ac8faaa,0 12px 28px #000a}.bc.sel.rb .bface{box-shadow:0 0 0 4px #fffa,-20px -20px 50px #ff3b30,20px -20px 50px #ffd53d,20px 20px 50px #34c759,-20px 20px 50px #5ac8fa,0 0 40px #9b6dff}.bc.sick .bface{filter:saturate(.45) brightness(.85)}
@@ -1264,7 +1264,7 @@ function boardTargets(){const T=new Map();
   p.gy.forEach((c,i,a)=>T.set(c.uid,{id:c.id,x:1470,y:me?840:185,s:.6,rot:0,flip:0,op:i===a.length-1?1:0,z:1,zone:'gy'}));
   if(me){const hn=p.hand.length,stp=Math.min(140,900/Math.max(1,hn)),hs=hn>8?.78:.85;
    p.hand.forEach((c,i)=>{const d=i-(hn-1)/2;const sel=ui.sel&&ui.sel.u===c.uid;
-    T.set(c.uid,sel?{id:c.id,x:960+d*stp,y:760,s:1,rot:0,flip:0,op:1,z:9,zone:'hd'}:{id:c.id,x:960+d*stp,y:1012+Math.min(d*d*6,34),s:hs,rot:Math.max(-14,Math.min(14,d*3.2)),flip:0,op:1,z:5,zone:'hd'})})}
+    T.set(c.uid,sel?{id:c.id,x:960+d*stp,y:760,s:1,rot:0,flip:0,op:1,z:9,zone:'hd'}:{id:c.id,x:960+d*stp,y:1034+Math.min(d*d*6,30),s:hs,rot:Math.max(-14,Math.min(14,d*3.2)),flip:0,op:1,z:5,zone:'hd'})})}
   else p.hand.forEach(c=>T.set(c.uid,{id:c.id,x:960,y:-230,s:.5,rot:0,flip:1,op:0,z:1,zone:'oh'}))}
  if(board.lunge){const t=T.get(board.lunge.uid);if(t){t.x=board.lunge.x;t.y=board.lunge.y;t.z=8}}
  return T}
