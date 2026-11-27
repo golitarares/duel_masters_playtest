@@ -139,7 +139,7 @@ p{margin:6px 0}
 .rc>.lgt{margin:26px 28px 0;padding-top:20px;border-top:1px solid #ffffff22}.rc>.lg{margin:10px 28px 0;height:190px}.rc .mini{flex:none;width:44px;height:44px}.rt small{white-space:nowrap;font-size:16px}.rt{gap:8px}.rt b{font-size:36px}.pan .st small{letter-spacing:.03em;font-size:14px}
 .mini{border-color:#6b5320;background:#0a1226cc;color:#ffe39a}
 .lgt{margin-top:34px;font-size:16px;letter-spacing:.2em;color:var(--n500)}
-.lg{margin-top:12px;height:300px;overflow:hidden}.lg div{font-size:22px;line-height:1.25;color:var(--n400);margin-bottom:10px}.lg .new{color:var(--fg);animation:lg .35s}
+.lg{margin-top:12px;height:300px;overflow:hidden}.lg div{font-size:22px;line-height:1.25;color:var(--n400);margin-bottom:10px}.lg .new{color:var(--fg);animation:lg .35s}.lg .hb{font-size:26px;line-height:1.3;color:var(--fg);margin:0}
 .bts{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:14px}
 .sb{height:76px;border-radius:12px;border:2px solid var(--acc);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:500;color:var(--a300);cursor:pointer;background:var(--bg)}
 .sb.pri{background:var(--acc);color:#161826;font-weight:600}.sb.dis{opacity:.3;border-color:var(--n700);color:var(--n500);background:transparent;cursor:default}
@@ -224,7 +224,7 @@ function auras(cr){if(typeof G==='undefined'||!G||!G.p||!cr)return [];const out=
  for(const q of G.p)if(q.bf.includes(cr)){ow=q;break}
  if(!ow)return out;
  for(const q of G.p)for(const g of q.bf){const au=C(g).au;if(!au)continue;
-  for(const a of au){if(q!==ow&&!a.both)continue;if(a.other&&g===cr)continue;if(a.tapped&&!g.tapped)continue;if(a.cond&&!condOk(q,a.cond,g))continue;
+  for(const a of au){if(q!==ow&&!a.both)continue;if(a.other&&g===cr)continue;if(a.tapped&&!g.tapped)continue;if(a.hasKw&&!a.hasKw.some(k=>C(cr).kw.includes(k)))continue;if(a.cond&&!condOk(q,a.cond,g))continue;
    if(a.race&&!C(cr).race.some(r=>a.race.some(x=>r.toLowerCase().includes(x))))continue;
    if(a.civ&&!C(cr).civ.some(v=>a.civ.includes(v)))continue;if(a.raceWord&&!crRaces(cr).some(r=>new RegExp('\\b'+a.raceWord+'\\b','i').test(r)))continue;out.push(a)}}
  return out}
@@ -390,6 +390,7 @@ function condOk(p,c,src){if(!c)return true;const o=G.p[1-p.i];
  if(c.meShieldsGE!=null&&p.shields.length<c.meShieldsGE)return false;
  if(c.oppManaMore&&!(o.mana.length>p.mana.length))return false;
  if(c.oppCrMore&&!(o.bf.length>p.bf.length))return false;
+ if(c.oppCrGE!=null&&o.bf.length<c.oppCrGE)return false;
  if(c.haveRace&&!p.bf.some(x=>crRaces(x).some(r=>r.toLowerCase().includes(c.haveRace))))return false;
  if(c.wave&&p.bf.filter(x=>x!==src&&hasKw(x,'wave')).length<2)return false;
  if(c.turbo&&!(p.broke&&[...p.broke].some(u=>!src||u!==src.uid)))return false;
@@ -786,6 +787,32 @@ FX.swapManaHand=async function(p){log('Each player swaps the cards in his mana z
  for(const q of G.p){const oldMana=q.mana.map(m=>({id:m.id,uid:m.uid}));const oldHand=q.hand.slice();q.hand=oldMana;q.mana=[];oldHand.forEach(h=>addMana(q,h,true))}ui.render()};
 FX.mana2hand=async function(p){log('Each player returns all cards from his mana zone to his hand.');
  for(const q of G.p){const m=q.mana.map(x=>({id:x.id,uid:x.uid}));q.mana=[];q.hand.push(...m)}ui.render()};
+
+FX.putFromHand=async function(p,f,src){if(p.bf.length>=7)return;const pool=p.hand.filter(h=>C(h).t==='creature'&&!C(h).evo&&cardMatch(h,f.filter,false));if(!pool.length)return;
+ const i=await choose(p,'Put a creature from your hand into the battle zone?',pool.map(h=>({id:h.id,label:`${nm(h)} (${C(h).p||'-'})`})),{none:!!f.optional,ai:()=>argmax(pool,h=>C(h).p||0)});if(i<0)return;
+ const h=pool[i];p.hand.splice(p.hand.indexOf(h),1);const cr=await makeCreature(p,h,true);if(cr){log(`${p.i?'Opponent':'You'} put ${nm(h)} into the battle zone.`);await enterBf(p,cr);await flushQ()}else p.hand.push(h)};
+FX.reshuffleHand=async function(p,f){for(const q of (f.who==='each'?G.p:[p])){const n=q.hand.length;if(!n)continue;q.deck.push(...q.hand.splice(0));shuffle(q.deck);log(`${q.i?'Opponent':'You'} shuffled ${n} card(s) from hand into the deck and drew ${n}.`);drawCard(q,n);if(G.over)return}ui.render()};
+FX.hand2mana=async function(p){const n=p.hand.length;if(!n)return;const h=p.hand.splice(0);h.forEach(c=>addMana(p,c,false));log(`${p.i?'Opponent':'You'} put ${n} card(s) from hand into the mana zone.`);
+ for(let k=0;k<n&&p.mana.length;k++){const j=await choose(p,'Choose a card from your mana zone to put into your hand',p.mana.map(m=>({id:m.id,label:nm(m)})),{ai:()=>argmax(p.mana,m=>C(m).t==='creature'||C(m).t==='spell'?C(m).cost+(m.tapped?0:.5):0)});const m=p.mana.splice(j<0?0:j,1)[0];p.hand.push({id:m.id,uid:m.uid})}
+ ui.render()};
+FX.pinpoint=async function(p){const items=[];for(const q of G.p){for(const c of q.bf)if(!(C(c).noChoose&&q!==p))items.push({z:'bf',q,c});for(const m of q.mana)items.push({z:'mana',q,c:m})}
+ if(!items.length)return;
+ const val=it=>it.q===p?-5:it.z==='bf'?3+power(it.c)/1000:2;
+ const opts=items.map(it=>({id:it.c.id,label:it.z==='bf'?`${nm(it.c)} (${power(it.c)}) - ${it.q.i?'rival':'yours'} battle zone`:`${nm(it.c)} - ${it.q.i?'rival':'your'} mana`}));
+ const i=await choose(p,'Choose a creature or a mana card to return to its owner\'s hand',opts,{ai:()=>argmax(items,val)});if(i<0)return;const it=items[i];
+ if(it.z==='bf')bounceCr(it.c);else{it.q.mana.splice(it.q.mana.indexOf(it.c),1);it.q.hand.push({id:it.c.id,uid:it.c.uid});log(`${nm(it.c)} returned from the mana zone to hand.`)}ui.render()};
+FX.waveDraw=async function(){for(const q of G.p){const n=q.bf.filter(c=>hasKw(c,'wave')).length;if(n){drawCard(q,n);log(`${q.i?'Opponent':'You'} drew ${n}.`);if(G.over)return}}ui.render()};
+FX.warp=async function(){for(const q of G.p){if(!q.bf.length)continue;const i=await choose(q,'Choose one of your creatures (the rest will be tapped)',q.bf.map(c=>({id:c.id,label:`${nm(c)} (${power(c)})`})),{ai:()=>argmax(q.bf,c=>power(c))});q.keepU=q.bf[i<0?0:i]}
+ for(const q of G.p){for(const c of q.bf)if(c!==q.keepU)c.tapped=true;q.keepU=null}log('All other creatures were tapped.');ui.render()};
+FX.heavyDestroy=async function(p,f,src){const o=G.p[1-p.i];if(!src||!p.bf.includes(src))return;const pool=o.bf.filter(c=>c.tapped&&!C(c).noChoose);if(!pool.length)return;
+ const ch=[];for(let k=0;k<2&&pool.length;k++){const c=await pickCr(p,'Choose up to 2 tapped creatures',pool,'high',true);if(!c)break;ch.push(c);pool.splice(pool.indexOf(c),1)}
+ if(!ch.length)return;const tot=ch.reduce((a,c)=>a+power(c),0);if(tot<power(src)){for(const c of ch)if(ownerOf(c))await destroyCr(c);await flushQ()}else log('Total power is too high - nothing happens.')};
+FX.transmog=async function(p){const pool=G.p.flatMap(q=>q.bf).filter(c=>!(C(c).noChoose&&ownerOf(c)!==p));if(!pool.length)return;
+ const opts=pool.map(c=>({id:c.id,label:`${nm(c)} (${power(c)})${ownerOf(c)===p?' - yours':' - rival'}`}));
+ const i=await choose(p,'Destroy a creature? (its owner reveals a creature from the deck)',opts,{none:true,ai:()=>{let b=-1,bv=3999;pool.forEach((c,k)=>{if(ownerOf(c)!==p&&power(c)>bv){bv=power(c);b=k}});return b}});if(i<0)return;
+ const c=pool[i],ow=ownerOf(c);await destroyCr(c);await flushQ();if(G.over)return;
+ let found=null;while(ow.deck.length){const x=ow.deck.pop();if(C(x).t==='creature'&&!C(x).evo){found=x;break}ow.gy.push(x)}
+ if(found){const cr=found&&ow.bf.length<7?await makeCreature(ow,found,true):null;if(cr){log(`${ow.i?'Opponent':'You'} revealed ${nm(found)} and put it into the battle zone.`);await enterBf(ow,cr);await flushQ()}else ow.gy.push(found)}ui.render()};
 FX.silentTapped=async function(){};
 FX.returnMoved=async function(p,f){const c=G.lastMoved;if(!c)return;const i=p.gy.findIndex(x=>x.uid===c.uid);if(i<0)return;
  if(f.optional){const k=await choose(p,`Return ${nm(c)} to your mana zone?`,[{label:'Return'},{label:'No'}],{ai:()=>0});if(k!==0)return}
@@ -811,7 +838,7 @@ function svFx(src,list,when){if(!src||!list||!G||!G.p||!isSv(src)||C(src).fx!==l
  const seen=new Set([src.id]),ex=[];for(const g of ow.bf){if(g===src||!isSv(g)||seen.has(g.id))continue;seen.add(g.id);for(const f of C(g).fx||[])if(f.when===when)ex.push(f)}return ex.length?list.concat(ex):list}
 async function runFx(p,list,when,src){list=svFx(src,list,when);for(const f of list||[]){if(G.over)return;if(f.when===when)await runOne(p,f,src)}await flushQ()}
 /* ---------- playing cards ---------- */
-async function enterBf(p,cr){p.bf.push(cr);cr.sick=!hasKw(cr,'speed')&&!cr.noSick;if(C(cr).kw.includes('skill2')&&p.bf.some(g=>g!==cr&&(C(g).fx||[]).some(f=>f.op==='silentTapped')))cr.tapped=true;log(`${p.i?'Opponent':'You'} summoned ${nm(cr)}.`);
+async function enterBf(p,cr){p.bf.push(cr);cr.sick=!hasKw(cr,'speed')&&!cr.noSick;if(C(cr).evo&&G.p.some(q=>q.bf.some(g=>g!==cr&&C(g).evoTapped)))cr.tapped=true;if(C(cr).kw.includes('skill2')&&p.bf.some(g=>g!==cr&&(C(g).fx||[]).some(f=>f.op==='silentTapped')))cr.tapped=true;log(`${p.i?'Opponent':'You'} summoned ${nm(cr)}.`);
  await ui.fx('cut',{kind:'SUMMON',id:cr.id,title:nm(cr),sub:[`${C(cr).cost} mana`,C(cr).p+' power',kwTxt(C(cr))].filter(Boolean).join(' · '),tone:p.i?'rival':'you'});ui.render();setTimeout(()=>ui.fxNow('land',{uid:cr.uid,tone:p.i?'rival':'you'}),500);await runFx(p,C(cr).fx,'etb',cr);
  G.entering=cr;for(const q of G.p)for(const c of [...q.bf])if(c!==cr&&q.bf.includes(c)&&!G.over){await runFx(q,C(c).fx,'enterOther',c);if(q===p&&q.bf.includes(c)&&!G.over)await runFx(q,C(c).fx,'enterOwn',c)}
  {const op=G.p[1-p.i];for(const c of [...op.bf])if(op.bf.includes(c)&&!G.over)await runFx(op,C(c).fx,'oppSummon',c)}
@@ -866,6 +893,7 @@ async function breakShields(p,cr,nOv){const o=G.p[1-p.i];
   const i=await choose(o,`Shield Trigger! Use ${nm(h)}?`,[{id:h.id,label:'Use it free',w:1},{label:'Keep in hand',w:1}],{ai:()=>0});
   if(i===0){o.hand.splice(o.hand.indexOf(h),1);log(`${o.i?'Opponent':'You'} used Shield Trigger: ${nm(h)}!`);await oppTrigHook(o);await castFree(o,h);if(p.bf.includes(cr)&&!G.over)await runFx(p,C(cr).fx,'trigBroken',cr)}}}
 async function doAttack(pi,cr,target){cr.brkThis=0;await doAttack0(pi,cr,target);
+ if(!G.over&&target.type==='player'&&C(cr).killAfterP&&G.p[pi].bf.includes(cr)){log(`${nm(cr)} is destroyed after attacking.`);await destroyCr(cr);await flushQ()}
  if(!G.over&&(G.atkDraw||[]).includes(pi)&&cr.brkThis>0){const p=G.p[pi],n=2*cr.brkThis;const i=await choose(p,`${nm(cr)} finished attacking. Draw ${n} cards?`,[{label:'Draw '+n},{label:'Skip'}],{ai:()=>0});if(i===0){drawCard(p,n);log(`${pi?'Opponent':'You'} drew ${n}.`);ui.render()}}}
 async function doAttack0(pi,cr,target){const p=G.p[pi],o=G.p[1-pi];cr.tapped=true;G.atkTgt=target;if(target.type==='cr')target.cr.wasAtk=G.turnNo;
  log(`${pi?'Opponent':'You'} attack with ${nm(cr)}${target.type==='cr'?' → '+nm(target.cr):''}.`);
@@ -1273,7 +1301,7 @@ function hudHtml(){const me=G.p[0],op=G.p[1],mine=G.cur===0&&!G.over,s=ui.sel;
  const hs=s&&s.z==='hand'?me.hand.find(h=>h.uid===s.u):null,bs=s&&s.z==='bf'?me.bf.find(c=>c.uid===s.u):null;
  const th=TUT.on?tutHl():null;
  const btn=(t,act,pri,dis)=>`<div class="sb ${pri?'pri':''} ${dis?'dis':''} ${th&&th.btn&&!dis?'tuthl':''}" ${dis?'':`data-act="${act}"`}>${t}</div>`;
- let b='';
+ let b='',hintG='';
  if(mine&&!ui.busy){
   const ph=Math.max(1,G.ph||1),canAtk=me.bf.some(c=>canAttack(me,c));let hint='',main;
   if(bs&&canAttack(me,bs)){hint='Drag to a target<br>or tap it';main=btn('Attack','attack',1,0)+(canSkill(me,bs)?btn('Use skill','skill',0,0):'')}
@@ -1283,13 +1311,12 @@ function hudHtml(){const me=G.p[0],op=G.p[1],mine=G.cur===0&&!G.over,s=ui.sel;
   else if(ph===1)main=me.charged?btn('Go to Main','phase',1,0):btn('Skip charge','phase',1,0),hint=me.charged?'':'Tap a card to charge it';
   else if(ph===2)main=canAtk?btn('Go to Attack','phase',1,0):btn('End turn','end',1,0),hint='Tap a card to summon it';
   else main=btn('End turn','end',1,0),hint=canAtk?'Tap a creature to attack':'';
-  b+=(hint?`<div class="hint">${hint}</div>`:'')+main}
- else b=`<div class="hint">${G.over?'':ui.busy?'…':'Rival is playing…'}</div>`;
- const lg=G.log.slice(-5).reverse();
+  hintG=hint;b+=main}
+ else hintG=G.over?'':ui.busy?'…':'Rival is playing…';
  return pan(op,30,30,'Kage','RIVAL','K','rival')+pan(me,30,860,'You','DUELIST','Y','you')+
  `<div class="rc"><div class="rt"><div><small>TURN ${Math.max(1,Math.ceil(G.turnNo/2))}</small><b>${G.cur===0?'Your turn':"Rival's turn"}</b></div><div class="mini" data-act="flip">⟲</div><div class="mini" data-act="log">Log</div><div class="mini" data-act="quit">✕</div></div>
  <div class="phs ${th&&th.phs?'tuthl':''}">${PH.map((n,i)=>`<div class="${i===ph?'on':i<ph?'dn':''}"><i></i>${n}</div>`).join('')}</div>
- <div class="lgt">DUEL LOG</div><div class="lg">${lg.map((l,i)=>`<div style="opacity:${Math.max(.3,1-i*.18)}" class="${i?'':'new'}">${ESC(l)}</div>`).join('')}</div>
+ <div class="lgt">HINT</div><div class="lg"><div class="hb">${hintG}</div></div>
  <div class="bts">${b}</div></div>`}
 
 function vZoom(){const id=ui.zoom;if(id==null)return '';const c=CARDS[id];
@@ -1530,5 +1557,5 @@ if(!IS_NODE){
  document.addEventListener('input',e=>{if(e.target.dataset.in==='q'){ui.B.q=e.target.value;ui.B.page=1;const pos=e.target.selectionStart;ui.render();const i=document.querySelector('[data-in=q]');i.focus();i.setSelectionRange(pos,pos)}});
  fetch('cards.json').then(r=>r.json()).then(j=>{CARDS=j;loadDeck();try{ui.cut=localStorage.getItem('dm_cut')!=='0'}catch(e){}ui.render()}).catch(()=>{document.getElementById('app').textContent='Failed to load cards.json'});
 }
-globalThis.__DM={endTurnFx,pickCr,hasKw,costOf,stBlk,evoBases,TUT,set cards(v){CARDS=v},startGame,startTurn,autoBuild,randomCivs,get G(){return G},setAuto(v){AUTO=v},ui,aiTurn,canPlay,power,OKP,FX,runFx,destroyCr,enterBf,resolveSpell,playCard,doAttack,battle,canSkill,useSkill,endTurn,canAttack,attackTargetsOf:attackTargets,rsOk,get CARDS(){return CARDS}};
+globalThis.__DM={endTurnFx,pickCr,breakShields,hasKw,costOf,stBlk,evoBases,TUT,set cards(v){CARDS=v},startGame,startTurn,autoBuild,randomCivs,get G(){return G},setAuto(v){AUTO=v},ui,aiTurn,canPlay,power,OKP,FX,runFx,destroyCr,enterBf,resolveSpell,playCard,doAttack,battle,canSkill,useSkill,endTurn,canAttack,attackTargetsOf:attackTargets,rsOk,get CARDS(){return CARDS}};
 </script>
