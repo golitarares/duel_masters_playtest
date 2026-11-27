@@ -264,6 +264,12 @@ function log(s){G.log.push(s);if(G.log.length>200)G.log.shift()}
 const nm=x=>C(x).n;
 function ownerOf(cr){return G.p.find(p=>p.bf.includes(cr))}
 function cardsOf(cr){return [{id:cr.id,uid:cr.uid},...cr.under]}
+function leaveCards(cr,ow){let cs=cardsOf(cr);
+ for(const f of C(cr).fx||[])if(f.when==='leave'&&ow)(G.q=G.q||[]).push({p:ow,f,cr});
+ if(C(cr).topOnly&&cr.under.length&&ow){cs=[cs[0]];for(const u of cr.under)ow.bf.push({id:u.id,uid:u.uid,tapped:cr.tapped,sick:false,noSick:true,buf:0,under:[]});log(`Only the top card of ${nm(cr)} leaves the battle zone; the other cards stay as separate creatures.`)}
+ return cs}
+function vBases(p,c){const m=r=>p.bf.filter(b=>crRaces(b).some(x=>x.toLowerCase()===r||x.toLowerCase()===r+'s'));const A=m(c.vortex[0]),B=m(c.vortex[1]);
+ if(!A.length||!B.length||(A.length===1&&B.length===1&&A[0]===B[0]))return null;return [A,B]}
 function crRaces(cr){return cr&&cr.xrace?C(cr).race.concat(cr.xrace):C(cr).race}
 function power(cr,att,vs){let v=(C(cr).p||0)+cr.buf;const ow=ownerOf(cr);
  for(const a of auras(cr))if(a.n)v+=a.n;
@@ -288,8 +294,8 @@ function planPay(p,id){const c=CARDS[id],cost=costOf(p,id),un=p.mana.filter(m=>!
   if(!cand.length)return null;ch.push(cand[0])}
  const rest=un.filter(m=>!ch.includes(m)).sort((a,b)=>C(a).civ.length-C(b).civ.length);
  while(ch.length<cost)ch.push(rest.shift());return ch}
-function evoBases(p,id){const c=CARDS[id];if(!c.evo)return [];if(!c.evoRaces)return null;
- return p.bf.filter(b=>crRaces(b).some(r=>c.evoRaces.some(e=>e[0]==='~'?r.toLowerCase().includes(e.slice(1).toLowerCase()):(r.toLowerCase()===e.toLowerCase()||r.toLowerCase()===e.toLowerCase()+'s'))))}
+function evoBases(p,id){const c=CARDS[id];if(!c.evo)return [];if(c.vortex){const v=vBases(p,c);return v?v[0].concat(v[1]):[]}if(!c.evoRaces)return null;
+ return p.bf.filter(b=>C(b).evoAny||crRaces(b).some(r=>c.evoRaces.some(e=>e[0]==='~'?r.toLowerCase().includes(e.slice(1).toLowerCase()):(r.toLowerCase()===e.toLowerCase()||r.toLowerCase()===e.toLowerCase()+'s'))))}
 function castBlocked(c){return c.t==='spell'&&G.p.some(q=>q.bf.some(g=>{const co=C(g).castOnly;return co&&!c.civ.includes(co)}))}
 function castIfBad(p,c){const k=c.castIf;if(!k)return false;
  if(k==='oppMoreShields')return !(G.p[1-p.i].shields.length>p.shields.length);
@@ -318,20 +324,20 @@ function drawCard(p,n=1){G.drawn=G.drawn||[0,0];G.drawn[p.i]+=n;for(let k=0;k<n;
 async function destroyCr(cr){const ow=ownerOf(cr);if(!ow)return;
  const rp=(C(cr).fx||[]).find(f=>f.when==='wouldDie'&&f.op==='replace');
  if(rp){let go=true;if(rp.cond&&rp.cond.sameName&&!ow.bf.some(c=>c!==cr&&C(c).n===C(cr).n))go=false;if(go&&rp.cond&&rp.cond.manaDragon&&!ow.mana.some(m=>(C(m).race||[]).some(r=>/\bdragon\b/i.test(r))))go=false;if(go&&rp.optional){const i=await choose(ow,`${nm(cr)} would be destroyed. Use its ability instead?`,[{id:cr.id,label:'Yes'},{label:'No'}],{ai:()=>0});go=i===0}
-  if(go&&ow.bf.includes(cr)){ow.bf.splice(ow.bf.indexOf(cr),1);const cs=cardsOf(cr);
+  if(go&&ow.bf.includes(cr)){ow.bf.splice(ow.bf.indexOf(cr),1);const cs=leaveCards(cr,ow);
    if(rp.to==='hand')ow.hand.push(...cs);else if(rp.to==='mana')cs.forEach(c=>addMana(ow,c));else if(rp.to==='shield')ow.shields.push(...cs);else{ow.deck.push(...cs);shuffle(ow.deck)}
    log(`${nm(cr)} went to ${rp.to==='mana'?'mana zone':rp.to==='shield'?'shields':rp.to==='deck'?'the deck':'hand'} instead of being destroyed.`);await rpAfter(ow,rp);return}}
- if(G.repHand&&ow.bf.includes(cr)&&G.repHand.some(e=>e.i===ow.i&&crRaces(cr).some(r=>r.toLowerCase().includes(e.race)))){ow.bf.splice(ow.bf.indexOf(cr),1);ow.hand.push(...cardsOf(cr));log(`${nm(cr)} returned to hand instead of being destroyed.`);return}
- if(G.trep&&G.trep.includes(ow.i)&&ow.bf.includes(cr)){ow.bf.splice(ow.bf.indexOf(cr),1);cardsOf(cr).forEach(c=>addMana(ow,c));log(`${nm(cr)} was put into the mana zone instead of being destroyed.`);return}
+ if(G.repHand&&ow.bf.includes(cr)&&G.repHand.some(e=>e.i===ow.i&&crRaces(cr).some(r=>r.toLowerCase().includes(e.race)))){ow.bf.splice(ow.bf.indexOf(cr),1);ow.hand.push(...leaveCards(cr,ow));log(`${nm(cr)} returned to hand instead of being destroyed.`);return}
+ if(G.trep&&G.trep.includes(ow.i)&&ow.bf.includes(cr)){ow.bf.splice(ow.bf.indexOf(cr),1);leaveCards(cr,ow).forEach(c=>addMana(ow,c));log(`${nm(cr)} was put into the mana zone instead of being destroyed.`);return}
  for(const q of G.p)for(const g of [...q.bf]){if(g===cr)continue;const f=(C(g).fx||[]).find(f=>f.when==='wouldDieOther');if(!f)continue;
   if(f.own!=='any'&&q!==ow)continue;if(!cardMatch(cr,f.filter,true))continue;
   if(f.to==='stay'){log(`${nm(g)}: ${nm(cr)} stays in the battle zone instead.`);return}
   let go=true;if(f.optional){const i=await choose(q,`${nm(cr)} would be destroyed. Use ${nm(g)}'s ability instead?`,[{id:g.id,label:'Yes'},{label:'No'}],{ai:()=>f.to==='destroySelf'?(power(g)<power(cr)?0:1):0});go=i===0}
   if(!go||!ow.bf.includes(cr))continue;
-  if(f.to==='hand'){ow.bf.splice(ow.bf.indexOf(cr),1);ow.hand.push(...cardsOf(cr));log(`${nm(cr)} returned to hand instead of being destroyed.`);return}
+  if(f.to==='hand'){ow.bf.splice(ow.bf.indexOf(cr),1);ow.hand.push(...leaveCards(cr,ow));log(`${nm(cr)} returned to hand instead of being destroyed.`);return}
   if(f.to==='destroySelf'){log(`${nm(g)} is destroyed instead of ${nm(cr)}.`);await destroyCr(g);return}}
  if(!ow.bf.includes(cr))return;
- ui.fxNow('burst',{uid:cr.uid,tone:ow.i?'rival':'you'});ow.bf.splice(ow.bf.indexOf(cr),1);ow.gy.push(...cardsOf(cr));log(`${nm(cr)} was destroyed.`);
+ ui.fxNow('burst',{uid:cr.uid,tone:ow.i?'rival':'you'});ow.bf.splice(ow.bf.indexOf(cr),1);ow.gy.push(...leaveCards(cr,ow));log(`${nm(cr)} was destroyed.`);
  if((G.dieTrap||[]).some(i=>i!==ow.i))await dieTrapPenalty(ow);
  for(const f of C(cr).fx||[])if(f.when==='destroyed')(G.q=G.q||[]).push({p:ow,f,cr});
  for(const g2 of ow.bf)if(g2!==cr)for(const f of C(g2).fx||[])if(f.when==='allyDie')(G.q=G.q||[]).push({p:ow,f,cr:g2,dead:cr});
@@ -343,7 +349,7 @@ async function dieTrapPenalty(t){
  if(t.mana.length){const i=await choose(t,'A creature was destroyed. Choose a card in your mana zone to put into the graveyard',t.mana.map(h=>({id:h.id,label:nm(h)})),{ai:os=>argmax(os,x=>-CARDS[x.id].cost)});const c=t.mana.splice(i<0?0:i,1)[0];t.gy.push({id:c.id,uid:c.uid});log(`${t.i?'Opponent':'You'} put ${nm(c)} from the mana zone into the graveyard.`)}
  if(t.shields.length){const i=await choose(t,'Choose one of your shields to put into the graveyard',t.shields.map((h,k)=>({id:t.human?h.id:undefined,label:t.human?nm(h):`Shield ${k+1}`})),{ai:()=>rnd(t.shields.length)});const c=t.shields.splice(i<0?0:i,1)[0];delete c.up;t.gy.push(c);log(`${t.i?'Opponent':'You'} put a shield into the graveyard.`)}
  ui.render()}
-function bounceCr(cr){const ow=ownerOf(cr);if(!ow)return;ow.bf.splice(ow.bf.indexOf(cr),1);ow.hand.push(...cardsOf(cr));log(`${nm(cr)} returned to hand.`)}
+function bounceCr(cr){const ow=ownerOf(cr);if(!ow)return;ow.bf.splice(ow.bf.indexOf(cr),1);ow.hand.push(...leaveCards(cr,ow));log(`${nm(cr)} returned to hand.`)}
 /* ---------- effects ---------- */
 const FX={
  async destroy(p,f){const o=G.p[1-p.i];const l=o.bf.filter(c=>(!f.untappedOnly||!c.tapped)&&(f.maxPower==null||power(c)<=f.maxPower));
@@ -391,6 +397,10 @@ function condOk(p,c,src){if(!c)return true;const o=G.p[1-p.i];
  if(c.oppManaMore&&!(o.mana.length>p.mana.length))return false;
  if(c.oppCrMore&&!(o.bf.length>p.bf.length))return false;
  if(c.oppCrGE!=null&&o.bf.length<c.oppCrGE)return false;
+ if(c.atkCr&&!(G.atkTgt&&G.atkTgt.type==='cr'))return false;
+ if(c.unbRace&&!(G.unbr&&crRaces(G.unbr).some(r=>c.unbRace.some(x=>r.toLowerCase().includes(x)))))return false;
+ if(c.blkRace&&!(G.blkr&&crRaces(G.blkr).some(r=>c.blkRace.some(x=>r.toLowerCase().includes(x)))))return false;
+ if(c.topPower&&!(p.bf.length&&p.bf.some(x=>o.bf.every(y=>power(x)>power(y)))))return false;
  if(c.haveRace&&!p.bf.some(x=>crRaces(x).some(r=>r.toLowerCase().includes(c.haveRace))))return false;
  if(c.wave&&p.bf.filter(x=>x!==src&&hasKw(x,'wave')).length<2)return false;
  if(c.turbo&&!(p.broke&&[...p.broke].some(u=>!src||u!==src.uid)))return false;
@@ -424,9 +434,9 @@ async function placeItem(p,f,it){const {x,s}=it,z=f.from;
  if(z==='bf'){
   if(f.to==='destroy'||f.to==='gy')await destroyCr(x);
   else if(f.to==='hand')bounceCr(x);
-  else if(f.to==='mana'){if(s.bf.includes(x)){s.bf.splice(s.bf.indexOf(x),1);cardsOf(x).forEach(c=>addMana(s,c));log(`${nm(x)} was put into the mana zone.`)}}
-  else if(f.to==='deckTop'){if(s.bf.includes(x)){s.bf.splice(s.bf.indexOf(x),1);s.deck.push(...cardsOf(x));log(`${nm(x)} was put on top of the deck.`)}}
-  else if(f.to==='shield'){if(s.bf.includes(x)){s.bf.splice(s.bf.indexOf(x),1);s.shields.push(...cardsOf(x).map(c=>({id:c.id,uid:c.uid})));log(`${nm(x)} was added to its owner's shields.`)}}
+  else if(f.to==='mana'){if(s.bf.includes(x)){s.bf.splice(s.bf.indexOf(x),1);leaveCards(x,s).forEach(c=>addMana(s,c));log(`${nm(x)} was put into the mana zone.`)}}
+  else if(f.to==='deckTop'){if(s.bf.includes(x)){s.bf.splice(s.bf.indexOf(x),1);s.deck.push(...leaveCards(x,s));log(`${nm(x)} was put on top of the deck.`)}}
+  else if(f.to==='shield'){if(s.bf.includes(x)){s.bf.splice(s.bf.indexOf(x),1);s.shields.push(...leaveCards(x,s).map(c=>({id:c.id,uid:c.uid})));log(`${nm(x)} was added to its owner's shields.`)}}
   return}
  if(z==='hand'&&f.to==='gy'&&G.cur!==s.i){const wf=(C(x).fx||[]).find(g=>g.when==='wouldDiscard');if(wf&&s.hand.includes(x)){let go=true;if(wf.optional){const i=await choose(s,`${nm(x)} would be discarded. Put it into the battle zone instead?`,[{id:x.id,label:'Yes'},{label:'No'}],{ai:()=>0});go=i===0}
   if(go){s.hand.splice(s.hand.indexOf(x),1);const cr=await makeCreature(s,x,true);if(cr){log(`${nm(x)} entered the battle zone instead of being discarded.`);await enterBf(s,cr)}else s.gy.push(x);return}}}
@@ -783,8 +793,8 @@ FX.clonedDiscard=async function(p,f){const o=G.p[1-p.i];const k=1+[...p.gy,...o.
  for(const x of ch)await placeItem(p,{from:'hand',to:'gy'},{x,s:o});
  log(`${o.i?'Opponent':'You'} discarded ${ch.length} card${ch.length>1?'s':''} at random.`);ui.render()};
 
-FX.swapManaHand=async function(p){log('Each player swaps the cards in his mana zone with the cards in his hand.');
- for(const q of G.p){const oldMana=q.mana.map(m=>({id:m.id,uid:m.uid}));const oldHand=q.hand.slice();q.hand=oldMana;q.mana=[];oldHand.forEach(h=>addMana(q,h,true))}ui.render()};
+FX.swapManaHand=async function(p,f){log(f&&f.who==='me'?'You swap the cards in your mana zone with the cards in your hand.':'Each player swaps the cards in his mana zone with the cards in his hand.');
+ for(const q of (f&&f.who==='me'?[p]:G.p)){const oldMana=q.mana.map(m=>({id:m.id,uid:m.uid}));const oldHand=q.hand.slice();q.hand=oldMana;q.mana=[];oldHand.forEach(h=>addMana(q,h,true))}ui.render()};
 FX.mana2hand=async function(p){log('Each player returns all cards from his mana zone to his hand.');
  for(const q of G.p){const m=q.mana.map(x=>({id:x.id,uid:x.uid}));q.mana=[];q.hand.push(...m)}ui.render()};
 
@@ -813,6 +823,30 @@ FX.transmog=async function(p){const pool=G.p.flatMap(q=>q.bf).filter(c=>!(C(c).n
  const c=pool[i],ow=ownerOf(c);await destroyCr(c);await flushQ();if(G.over)return;
  let found=null;while(ow.deck.length){const x=ow.deck.pop();if(C(x).t==='creature'&&!C(x).evo){found=x;break}ow.gy.push(x)}
  if(found){const cr=found&&ow.bf.length<7?await makeCreature(ow,found,true):null;if(cr){log(`${ow.i?'Opponent':'You'} revealed ${nm(found)} and put it into the battle zone.`);await enterBf(ow,cr);await flushQ()}else ow.gy.push(found)}ui.render()};
+
+FX.putSameFromMana=async function(p,f,src){if(!src||p.bf.length>=7)return;const pool=p.mana.filter(m=>C(m).n===C(src).n);if(!pool.length)return;
+ const i=await choose(p,`Put ${nm(src)} from your mana zone into the battle zone?`,[{id:pool[0].id,label:'Yes'},{label:'No'}],{ai:()=>0});if(i!==0)return;
+ const m=pool[0];p.mana.splice(p.mana.indexOf(m),1);const cr=await makeCreature(p,m,true);if(cr){log(`${nm(m)} entered the battle zone from the mana zone.`);await enterBf(p,cr);await flushQ()}else p.mana.push(m);ui.render()};
+
+FX.destroySelf=async function(p,f,src){if(src&&p.bf.includes(src))await destroyCr(src)};
+FX.forceBlock=async function(p,f,src){const o=G.p[1-p.i];const pool=o.bf.filter(c=>!c.tapped&&hasKw(c,'blocker')&&!(C(c).noChoose));if(!pool.length||!src)return;
+ const c=await pickCr(p,'Choose an untapped creature with blocker (it must block this creature)',pool,'low',true);if(!c)return;c.mbFor={u:src.uid,t:G.turnNo};log(`${nm(c)} must block ${nm(src)} if able.`)};
+function popTop(cr){const ow=ownerOf(cr);if(!ow||!cr.under.length)return null;const top={id:cr.id,uid:cr.uid};const nx=cr.under.shift();cr.id=nx.id;cr.uid=nx.uid;return {top,ow}}
+FX.topOut=async function(p,f){const o=G.p[1-p.i];let pool=(f.all?G.p.flatMap(q=>q.bf):o.bf).filter(c=>C(c).evo&&c.under.length&&!(C(c).noChoose&&ownerOf(c)!==p));if(!pool.length)return;
+ let t=pool;if(!f.all){const c=await pickCr(p,'Choose an evolution creature',pool,'high',!!f.optional);if(!c)return;t=[c]}
+ for(const c of t){const nmx=nm(c);const r=popTop(c);if(!r)continue;if(f.to==='gy')r.ow.gy.push(r.top);else addMana(r.ow,r.top,false);log(`The top card of ${nmx} was put into ${f.to==='gy'?'the graveyard':'the mana zone'}.`)}
+ ui.render()};
+FX.nameReturn=async function(p){const cs=p.gy.filter(c=>C(c).t==='creature');if(!cs.length)return;const names=[...new Set(cs.map(c=>C(c).n))];
+ const sc=n=>cs.filter(c=>C(c).n===n).length*10+Math.max(...cs.filter(c=>C(c).n===n).map(c=>C(c).p||0))/1000;
+ const i=await choose(p,'Choose a creature in your graveyard (all with that name return)',names.map(n=>({label:n})),{ai:()=>argmax(names,sc)});if(i<0)return;
+ const n=names[i],back=p.gy.filter(c=>C(c).n===n&&C(c).t==='creature');p.gy=p.gy.filter(c=>!back.includes(c));p.hand.push(...back);log(`${back.length} card(s) named ${n} returned to hand.`);ui.render()};
+
+FX.revealPut=async function(p){if(!p.deck.length)return;const x=p.deck.pop();log(`${p.i?'Opponent':'You'} revealed ${nm(x)}.`);
+ if(C(x).t==='creature'&&!C(x).evo&&p.bf.length<7){const cr=await makeCreature(p,x,true);if(cr){await enterBf(p,cr);await flushQ();return}}
+ p.hand.push(x);ui.render()};
+FX.bounceSelf=async function(p,f,src){if(src&&p.bf.includes(src)){bounceCr(src);ui.render()}};
+FX.noBattleBounce=async function(p){const c=G.bctx;if(!c||!c.b)return;c.nb=1;if(ownerOf(c.b))bounceCr(c.b);ui.render()};
+FX.extraTurnLose=async function(p){G.extra=p.i;G.loseNext={i:p.i,armed:false};log(`${p.i?'Opponent':'You'} will take an extra turn and lose the game at the end of it.`)};
 FX.silentTapped=async function(){};
 FX.returnMoved=async function(p,f){const c=G.lastMoved;if(!c)return;const i=p.gy.findIndex(x=>x.uid===c.uid);if(i<0)return;
  if(f.optional){const k=await choose(p,`Return ${nm(c)} to your mana zone?`,[{label:'Return'},{label:'No'}],{ai:()=>0});if(k!==0)return}
@@ -828,8 +862,8 @@ FX.breakShield=async function(p,f,src){const o=G.p[1-p.i];if(!o.shields.length||
 FX.noBattle=async function(){if(G.bctx)G.bctx.nb=1};
 FX.replace=async function(){};
 async function runOne(p,f,src){if(src&&C(src).t==='creature'&&G.p.some(q=>q.bf.some(g=>C(g).lockCr)))return;if(!condOk(p,f.cond,src))return;if(f.ifDo&&!G.lastDid)return;if(globalThis.__fxhit)globalThis.__fxhit(f,src);
- if(f.chooseRace){const rs=[...new Set(G.p.flatMap(q=>q.bf.concat(f.from==='gy'?q.gy:[]).flatMap(x=>crRaces(x))))].filter(Boolean).filter(r=>!f.exceptRace||r.toLowerCase()!==f.exceptRace.toLowerCase());if(!rs.length)return;
-  const mine=r=>p.bf.filter(x=>crRaces(x).includes(r)).length+(f.from==='gy'?p.gy.filter(x=>crRaces(x).includes(r)).length:0);
+ if(f.chooseRace){const rs=[...new Set(G.p.flatMap(q=>q.bf.concat(f.from==='gy'?q.gy:[],f.from==='hand'&&q===p?q.hand.filter(h=>C(h).t==='creature'):[]).flatMap(x=>crRaces(x))))].filter(Boolean).filter(r=>!f.exceptRace||r.toLowerCase()!==f.exceptRace.toLowerCase());if(!rs.length)return;
+  const mine=r=>p.bf.filter(x=>crRaces(x).includes(r)).length+(f.from==='gy'?p.gy.filter(x=>crRaces(x).includes(r)).length:0)+(f.from==='hand'?p.hand.filter(x=>crRaces(x).includes(r)).length:0);
   const i=await choose(p,'Choose a race',rs.map(r=>({label:r})),{ai:os=>argmax(os,x=>mine(x.label))});if(i<0)return;
   f={...f,chooseRace:false,filter:{...(f.filter||{}),race:rs[i].toLowerCase()}}}
  if(FX[f.op])await FX[f.op](p,f,src)}
@@ -840,17 +874,22 @@ async function runFx(p,list,when,src){list=svFx(src,list,when);for(const f of li
 /* ---------- playing cards ---------- */
 async function enterBf(p,cr){p.bf.push(cr);cr.sick=!hasKw(cr,'speed')&&!cr.noSick;if(C(cr).evo&&G.p.some(q=>q.bf.some(g=>g!==cr&&C(g).evoTapped)))cr.tapped=true;if(C(cr).kw.includes('skill2')&&p.bf.some(g=>g!==cr&&(C(g).fx||[]).some(f=>f.op==='silentTapped')))cr.tapped=true;log(`${p.i?'Opponent':'You'} summoned ${nm(cr)}.`);
  await ui.fx('cut',{kind:'SUMMON',id:cr.id,title:nm(cr),sub:[`${C(cr).cost} mana`,C(cr).p+' power',kwTxt(C(cr))].filter(Boolean).join(' · '),tone:p.i?'rival':'you'});ui.render();setTimeout(()=>ui.fxNow('land',{uid:cr.uid,tone:p.i?'rival':'you'}),500);await runFx(p,C(cr).fx,'etb',cr);
+ if(C(cr).evo)for(const q of G.p)for(const g of [...q.bf])if(g!==cr&&q.bf.includes(g)&&!G.over&&(C(g).fx||[]).some(f=>f.when==='evolveAny'))await runFx(q,C(g).fx,'evolveAny',g);
  G.entering=cr;for(const q of G.p)for(const c of [...q.bf])if(c!==cr&&q.bf.includes(c)&&!G.over){await runFx(q,C(c).fx,'enterOther',c);if(q===p&&q.bf.includes(c)&&!G.over)await runFx(q,C(c).fx,'enterOwn',c)}
  {const op=G.p[1-p.i];for(const c of [...op.bf])if(op.bf.includes(c)&&!G.over)await runFx(op,C(c).fx,'oppSummon',c)}
  if(!G.over&&(G.sumSame||[]).includes(p.i)&&p.bf.includes(cr))await FX.search(p,{filter:{type:'creature',name:C(cr).n},to:'bf'})}
 async function makeCreature(p,h,free){const c=C(h);let cr={id:h.id,uid:h.uid,tapped:false,sick:true,buf:0,under:[]};
+ if(c.evo&&c.vortex){const v=vBases(p,c);if(!v)return null;
+  const a=await pickCr(p,`Vortex evolution: choose a ${c.vortex[0]}`,v[0],'low');if(!a)return null;
+  const b2=await pickCr(p,`Vortex evolution: choose a ${c.vortex[1]}`,v[1].filter(x=>x!==a),'low');if(!b2)return null;
+  p.bf.splice(p.bf.indexOf(a),1);p.bf.splice(p.bf.indexOf(b2),1);cr.under=cardsOf(a).concat(cardsOf(b2));cr.tapped=a.tapped&&b2.tapped;cr.sick=false;cr.noSick=true;cr.buf=0;return cr}
  if(c.evo){const b=evoBases(p,h.id);if(!b||!b.length)return null;
   const base=await pickCr(p,'Evolve which creature?',b,'low');if(!base)return null;
   p.bf.splice(p.bf.indexOf(base),1);cr.under=cardsOf(base);cr.tapped=base.tapped;cr.sick=false;cr.noSick=true;cr.buf=base.buf}
  return cr}
 async function resolveSpell(p,h,trig){G.spellCt=G.spellCt||[0,0];G.spellCt[p.i]++;log(`${p.i?'Opponent':'You'} cast ${nm(h)}.`);
  await ui.fx('cut',{kind:trig?'SHIELD TRIGGER':'SPELL',id:h.id,title:nm(h),sub:C(h).fx.map(fxTxt).filter(Boolean).join(' ')||kwTxt(C(h)),tone:p.i?'rival':'you'});await runFx(p,C(h).fx,'spell');await castHooks(p);
- if(hasKw(h,'charger')||hasKw(h,'toMana')||hasKw(h,'toManaT')){addMana(p,h,hasKw(h,'toManaT'));log(`${nm(h)} went to the mana zone.`)}else p.gy.push(h)}
+ if(hasKw(h,'charger')||hasKw(h,'toMana')||hasKw(h,'toManaT')){addMana(p,h,hasKw(h,'toManaT'));log(`${nm(h)} went to the mana zone.`)}else if(trig&&p.bf.some(g=>C(g).stToHand)){p.hand.push(h);log(`${nm(h)} was put into the hand.`)}else p.gy.push(h)}
 async function castHooks(p){const op=G.p[1-p.i];for(const c of [...op.bf])if(op.bf.includes(c)&&!G.over)await runFx(op,C(c).fx,'oppCast',c);
  for(const q of G.p)for(const c of [...q.bf])if(q.bf.includes(c)&&!G.over)await runFx(q,C(c).fx,'anyCast',c)}
 async function castFree(p,h){if(C(h).t==='spell')await resolveSpell(p,h,true);else{const cr=await makeCreature(p,h,true);if(cr){if(hasKw(h,'trigger'))await ui.fx('cut',{kind:'SHIELD TRIGGER',id:h.id,title:nm(h),sub:kwTxt(C(h)),tone:p.i?'rival':'you'});await enterBf(p,cr)}else p.hand.push(h)}}
@@ -862,9 +901,10 @@ async function playCard(p,uid){const h=p.hand.find(x=>x.uid===uid);if(!h||!canPl
 function chargeMana(p,uid){const h=p.hand.find(x=>x.uid===uid);if(!h||p.charged||(G.ph||0)>1)return false;p.hand.splice(p.hand.indexOf(h),1);addMana(p,h,hasKw(h,'toManaT'));p.charged=true;log(`${p.i?'Opponent':'You'} charged mana.`);return true}
 /* ---------- combat ---------- */
 function attackTargets(p,cr){const o=G.p[1-p.i],t=[];
- if(!hasKw(cr,'noPlayers')&&!(G.civLock||[]).some(l=>l.i===o.i&&C(cr).civ.includes(l.civ)))t.push({type:'player'});
+ if((!hasKw(cr,'noPlayers')||ignA(cr))&&(ignA(cr)||!(G.civLock||[]).some(l=>l.i===o.i&&C(cr).civ.includes(l.civ))))t.push({type:'player'});
  for(const c of o.bf){if(rsOk(cr,'noatkC')||rsOk(c,'unatk',cr))continue;if(C(cr).atkOnlyBl&&!hasKw(c,'blocker'))continue;if(c.tapped||hasKw(cr,'attackUntapped')||rsOk(cr,'atkU',c)||(c.tmp&&c.tmp.includes('asTapped')))t.push({type:'cr',cr:c})}return t}
-function canAttack(p,cr){const ni=C(cr).noAtkIf;if(ni&&!(cr.tmp&&cr.tmp.includes('ign'))&&((ni.noHand&&!p.hand.length)||(ni.oppMoreCr&&G.p[1-p.i].bf.length>p.bf.length)||(ni.otherUntapped&&p.bf.some(x=>x!==cr&&!x.tapped))))return false;return !cr.tapped&&(!cr.sick||hasKw(cr,'speed')||(cr.tmp&&cr.tmp.includes('ign')))&&(!hasKw(cr,'cantattack')||(cr.tmp&&cr.tmp.includes('ign')))&&!rsOk(cr,'noatk')&&!G.p.some(q=>q.bf.some(g=>C(g).noAtkP!=null&&power(cr,false)>=C(g).noAtkP))&&attackTargets(p,cr).length>0}
+const ignA=cr=>!!(cr.tmp&&(cr.tmp.includes('ign')||cr.tmp.includes('ign2')));
+function canAttack(p,cr){const ni=C(cr).noAtkIf;if(ni&&!ignA(cr)&&((ni.noHand&&!p.hand.length)||(ni.oppMoreCr&&G.p[1-p.i].bf.length>p.bf.length)||(ni.otherUntapped&&p.bf.some(x=>x!==cr&&!x.tapped))))return false;return !cr.tapped&&(!cr.sick||hasKw(cr,'speed')||(cr.tmp&&cr.tmp.includes('ign')))&&(!hasKw(cr,'cantattack')||ignA(cr))&&(ignA(cr)||!rsOk(cr,'noatk'))&&(ignA(cr)||!G.p.some(q=>q.bf.some(g=>C(g).noAtkP!=null&&power(cr,false)>=C(g).noAtkP)))&&attackTargets(p,cr).length>0}
 async function battle(a,d){const pa=power(a,true,d),pd=power(d,false,a);log(`${nm(a)} (${pa}) battles ${nm(d)} (${pd}).`);
  let aDies=pd>pa||hasKw(d,'slayer')||pd===pa,dDies=pa>pd||hasKw(a,'slayer')||pd===pa;
  if(aDies&&C(a).surviveVs&&byOk(C(a).surviveVs,d)){aDies=false;log(`${nm(a)} isn't destroyed.`)}
@@ -876,7 +916,8 @@ async function oppTrigHook(o){const p=G.p[1-o.i];for(const c of [...p.bf])if(p.b
 async function breakShields(p,cr,nOv){const o=G.p[1-p.i];
  if(!o.shields.length){await ui.fx('stamp',{text:'DIRECT ATTACK',flash:1});G.over=true;G.winner=p.i;log(`${p.i?'Opponent':'You'} attacked the last gap - game over!`);return}
  const n=Math.min(nOv||breakCount(p,cr),o.shields.length),broken=[],pts=[];
- for(let k=0;k<n;k++){const sh=o.shields.splice(rnd(o.shields.length),1)[0];
+ for(let k=0;k<n;k++){let ix=rnd(o.shields.length);if(o.bf.some(g=>C(g).defChoose)&&o.shields.length>1){const j=await choose(o,'Choose the shield that will be broken',o.shields.map((_,k)=>({label:'Shield '+(k+1)})),{ai:()=>rnd(o.shields.length)});if(j>=0)ix=j}
+  const sh=o.shields.splice(ix,1)[0];
   const subs=o.bf.filter(c=>(C(c).fx||[]).some(f=>f.when==='shieldSub')&&!(c._sub&&c._sub===G.turnNo));let used=false;
   for(const c of subs){const f=C(c).fx.find(f=>f.when==='shieldSub');
    if(f.op==='subDiscard'&&o.hand.length<f.n)continue;
@@ -888,7 +929,8 @@ async function breakShields(p,cr,nOv){const o=G.p[1-p.i];
  if(!broken.length){ui.render();return}
  for(const c of broken){const q=board.pos.get(c.uid);if(q)pts.push({u:c.uid,x:q.x,y:q.y,s:q.s,rot:q.rot})}
  if(pts.length)await ui.fx('shbreak',{pts,col:GLOW[C(cr).civ[0]],rv:p.i===1});
- const burn=hasKw(cr,'shieldBurn');if(burn){o.gy.push(...broken);log(`${nm(cr)} sent ${broken.length} shield${broken.length>1?'s':''} to the graveyard.`)}else o.hand.push(...broken);(p.broke||(p.broke=new Set())).add(cr.uid);p.shBr=(p.shBr||0)+broken.length;cr.brkThis=(cr.brkThis||0)+broken.length;if(!burn)log(`${nm(cr)} broke ${broken.length} shield${broken.length>1?'s':''}.`);ui.render();await ui.fx('stamp',{text:'SHIELD BREAK',shake:1,top:p.i===0?0:1});
+ const rv=hasKw(cr,'shieldReveal');const burn=hasKw(cr,'shieldBurn');if(burn){o.gy.push(...broken);log(`${nm(cr)} sent ${broken.length} shield${broken.length>1?'s':''} to the graveyard.`)}else if(!rv)o.hand.push(...broken);(p.broke||(p.broke=new Set())).add(cr.uid);p.shBr=(p.shBr||0)+broken.length;cr.brkThis=(cr.brkThis||0)+broken.length;if(!burn)log(`${nm(cr)} broke ${broken.length} shield${broken.length>1?'s':''}.`);ui.render();await ui.fx('stamp',{text:'SHIELD BREAK',shake:1,top:p.i===0?0:1});
+ if(rv){for(const h of broken){if(G.over)return;if(C(h).t==='spell'&&hasKw(h,'trigger')&&!stBlk(h)){log(`${nm(h)} was shown and cast for free.`);await resolveSpell(p,h,true);const k=p.gy.lastIndexOf(h);if(k>=0){p.gy.splice(k,1);o.gy.push(h)}}else{o.hand.push(h);log(`${nm(h)} was shown and put into the hand.`)}}return}
  for(const h of burn?[]:broken){if(G.over)return;if(!hasKw(h,'trigger')||stBlk(h)||!o.hand.includes(h))continue;
   const i=await choose(o,`Shield Trigger! Use ${nm(h)}?`,[{id:h.id,label:'Use it free',w:1},{label:'Keep in hand',w:1}],{ai:()=>0});
   if(i===0){o.hand.splice(o.hand.indexOf(h),1);log(`${o.i?'Opponent':'You'} used Shield Trigger: ${nm(h)}!`);await oppTrigHook(o);await castFree(o,h);if(p.bf.includes(cr)&&!G.over)await runFx(p,C(cr).fx,'trigBroken',cr)}}}
@@ -904,16 +946,16 @@ async function doAttack0(pi,cr,target){const p=G.p[pi],o=G.p[1-pi];cr.tapped=tru
  if(target.type==='cr'&&o.bf.includes(target.cr)){G.atkd=target.cr;for(const c of [...o.bf])if(o.bf.includes(c)&&!G.over)await runFx(o,C(c).fx,'allyAttacked',c);if(G.over)return;await runFx(o,C(target.cr).fx,'attacked',target.cr);if(G.over||!p.bf.includes(cr))return}
  const stl=['L','W','D','F','N'].some(v=>hasKw(cr,'st_'+v)&&o.mana.some(m=>C(m).civ.includes(v)));
  const unbC=target.type==='cr'&&C(cr).unblockVsCr;
- const bl0=(stl||unbC)?[]:o.bf.filter(b=>!b.tapped&&hasKw(b,'blocker')&&b!==target.cr&&!rsOk(cr,'unblock',b)&&(!C(b).blkOnly||byOk(C(b).blkOnly,cr))&&!(C(cr).unblockBy&&power(b)<=C(cr).unblockBy));
- const mb=bl0.filter(b=>hasKw(b,'mustBlock'));const bl=mb.length?mb:bl0;
+ const bl0=(stl||unbC)?[]:o.bf.filter(b=>!b.tapped&&hasKw(b,'blocker')&&b!==target.cr&&!rsOk(cr,'unblock',b)&&(!C(b).blkOnly||byOk(C(b).blkOnly,cr))&&!(C(cr).unblockBy&&power(b)<=C(cr).unblockBy)&&!(cr.tmp&&cr.tmp.includes('unb3')&&power(b)<=3000));
+ const mb=bl0.filter(b=>hasKw(b,'mustBlock')||(b.mbFor&&b.mbFor.u===cr.uid&&b.mbFor.t===G.turnNo));const bl=mb.length?mb:bl0;
  if(bl.length){const opts=bl.map(b=>({id:b.id,label:`${nm(b)} (${power(b)})`}));if(!mb.length)opts.push({label:'No block'});
   const ap=power(cr,true);
   const i=mb.length&&bl.length===1?0:await choose(o,`${nm(cr)} (${ap}) attacks ${target.type==='player'?'you':nm(target.cr)}. ${mb.length?'A creature must block!':'Block?'}`,opts,{ai:os=>{
    const last=target.type==='player'&&o.shields.length<=1;let best=-1;
    bl.forEach((b,k)=>{const pb=power(b);const good=pb>ap||hasKw(b,'slayer')||(pb===ap&&last);if(good&&(best<0||pb<power(bl[best])))best=k});
    if(best<0&&last)best=argmax(bl,b=>-power(b));return best<0?(mb.length?argmax(bl,b=>power(b)):bl.length):best}});
-  if(i>=0&&i<bl.length){const b=bl[i];b.tapped=true;log(`${nm(b)} blocks!`);if((G.blkSlayer||[]).includes(p.i))cr.tmp=(cr.tmp||[]).concat(['slayer']);G.atkT=target.type;G.bctx={nb:0,un:0};await runFx(o,C(b).fx,'block',b);const cx=G.bctx;G.bctx=null;if(G.over)return;if(p.bf.includes(cr)){G.bctx=cx;await runFx(p,C(cr).fx,'blocked',cr);G.bctx=null;if(!G.over&&p.bf.includes(cr)&&target.type==='player'&&(G.blkBreak||[]).some(e=>e.i===p.i&&C(cr).civ.includes(e.civ)))await breakShields(p,cr,1)}if(!cx.nb&&p.bf.includes(cr)&&o.bf.includes(b))await battle(cr,b);if(cx.un&&o.bf.includes(b))b.tapped=false;if(G.ua){const u=G.ua;G.ua=null;u.tapped=false;log(`${nm(u)} untapped after the battle.`)}await flushQ();return}}
- if(target.type==='player'&&p.bf.includes(cr)){await runFx(p,C(cr).fx,'unblocked',cr);if(G.over||!p.bf.includes(cr))return}
+  if(i>=0&&i<bl.length){const b=bl[i];b.tapped=true;log(`${nm(b)} blocks!`);if((G.blkSlayer||[]).includes(p.i))cr.tmp=(cr.tmp||[]).concat(['slayer']);G.atkT=target.type;G.bctx={nb:0,un:0,b};await runFx(o,C(b).fx,'block',b);const cx=G.bctx;G.bctx=null;G.blkr=b;for(const g of [...o.bf])if(o.bf.includes(g)&&!G.over&&(C(g).fx||[]).some(f=>f.when==='allyBlock'))await runFx(o,C(g).fx,'allyBlock',g);G.blkr=null;if(G.over)return;if(p.bf.includes(cr)){G.bctx=cx;await runFx(p,C(cr).fx,'blocked',cr);G.bctx=null;if(!G.over&&p.bf.includes(cr)&&target.type==='player'&&(G.blkBreak||[]).some(e=>e.i===p.i&&C(cr).civ.includes(e.civ)))await breakShields(p,cr,1)}if(!cx.nb&&p.bf.includes(cr)&&o.bf.includes(b))await battle(cr,b);if(cx.un&&o.bf.includes(b))b.tapped=false;if(G.ua){const u=G.ua;G.ua=null;u.tapped=false;log(`${nm(u)} untapped after the battle.`)}await flushQ();return}}
+ if(target.type==='player'&&p.bf.includes(cr)){await runFx(p,C(cr).fx,'unblocked',cr);if(G.over||!p.bf.includes(cr))return;G.unbr=cr;for(const g of [...p.bf])if(p.bf.includes(g)&&!G.over&&(C(g).fx||[]).some(f=>f.when==='allyUnblocked'))await runFx(p,C(g).fx,'allyUnblocked',g);G.unbr=null;if(G.over||!p.bf.includes(cr))return}
  if(target.type==='cr'){if(o.bf.includes(target.cr))await battle(cr,target.cr)}else await breakShields(p,cr)}
 /* ---------- turns ---------- */
 async function untapViaMana(p){const tp=p.bf.filter(c=>c.tapped);if(!tp.length||p.mana.length<2)return;
@@ -949,7 +991,8 @@ async function endTurn(){await forceAttacks(G.p[G.cur]);if(G.over)return;const n
 async function endTurnFx(){const i=G.cur;for(const q of G.p)for(const c of [...q.bf])if(q.bf.includes(c)&&!G.over&&(C(c).fx||[]).some(f=>f.when==='endAny'))await runFx(q,C(c).fx,'endAny',c);G.trep=null;G.repHand=null;G.sumSame=null;G.atkDraw=null;G.blkSlayer=null;G.blkBreak=null;G.dieTrap=null;
  if(G.eotKill){for(const c of [...G.eotKill])for(const q of G.p)if(q.bf.includes(c)){log(`${nm(c)} is destroyed at the end of the turn.`);await destroyCr(c)}G.eotKill=null}
  if(G.eotSearch){const l=G.eotSearch;G.eotSearch=null;for(const e of l){const q=G.p[e.i],n=q.shBr||0;if(n)await FX.search(q,Object.assign({},e.f,{n}));}}
-for(const c of [...G.p[i].bf])if(G.p[i].bf.includes(c)&&!G.over)await runFx(G.p[i],C(c).fx,'endturn',c);if(G.over)return -1;if(G.eot){for(const e of G.eot)(e.both?G.p:[G.p[e.i]]).forEach(q=>q.bf.forEach(c=>{if(c.tapped&&cardMatch(c,e.filter,true)){c.tapped=false;log(`${nm(c)} untapped at end of turn.`)}}));G.eot=null}for(const c of G.p[i].bf)if(c.tmp&&c.tmp.includes('untapEnd')){c.tapped=false;log(`${nm(c)} untapped at end of turn.`)}await discardExcess(G.p[i]);G.p.forEach(p=>p.bf.forEach(c=>{c.buf=0;c.tmp=null;c.xrace=null}));ui.render();const nxt=G.extra===i?i:1-i;G.extra=null;return nxt}
+for(const c of [...G.p[i].bf])if(G.p[i].bf.includes(c)&&!G.over)await runFx(G.p[i],C(c).fx,'endturn',c);if(G.over)return -1;if(G.eot){for(const e of G.eot)(e.both?G.p:[G.p[e.i]]).forEach(q=>q.bf.forEach(c=>{if(c.tapped&&cardMatch(c,e.filter,true)){c.tapped=false;log(`${nm(c)} untapped at end of turn.`)}}));G.eot=null}for(const c of G.p[i].bf)if(c.tmp&&c.tmp.includes('untapEnd')){c.tapped=false;log(`${nm(c)} untapped at end of turn.`)}await discardExcess(G.p[i]);G.p.forEach(p=>p.bf.forEach(c=>{c.buf=0;c.tmp=null;c.xrace=null}));ui.render();if(G.loseNext&&G.loseNext.i===i){if(G.loseNext.armed){G.over=true;G.winner=1-i;log(`${i?'Opponent':'You'} lost the game at the end of the extra turn.`);G.loseNext=null;return -1}G.loseNext.armed=true}
+ const nxt=G.extra===i?i:1-i;G.extra=null;return nxt}
 /* ---------- AI ---------- */
 function aiCharge(p){if(p.charged||!p.hand.length)return;
  const have=new Set(p.mana.flatMap(m=>C(m).civ));
@@ -958,7 +1001,7 @@ function aiCharge(p){if(p.charged||!p.hand.length)return;
   if(c.civ.some(v=>!have.has(v)))s+=4;if(c.cost>p.mana.length+3)s+=5;if(c.cost<=p.mana.length+1)s-=3;if(c.t==='spell'&&c.fx.length===0&&c.kw.includes('trigger'))s+=1;if(c.civ.length>1)s-=2;
   if(s>bs){bs=s;best=h}}
  if(best)chargeMana(p,best.uid)}
-function aiWants(p,h){const c=C(h),o=G.p[1-p.i];if(c.t==='creature')return !c.evo||canPlay(p,h);
+function aiWants(p,h){const c=C(h),o=G.p[1-p.i];if(c.t==='creature'&&(c.fx||[]).some(f=>f.op==='extraTurnLose')&&o.shields.length>3)return false;if(c.t==='creature')return !c.evo||canPlay(p,h);
  if(!c.fx.length)return false;
  return c.fx.every(f=>fxUseful(p,f))}
 function fxUseful(p,f){const o=G.p[1-p.i];{switch(f.op){
@@ -984,7 +1027,7 @@ function aiTarget(p,cr){const o=G.p[1-p.i],ts=attackTargets(p,cr),pa=power(cr,tr
  let best=null,bv=-1;for(const t of ts){if(t.type!=='cr')continue;const pd=power(t.cr);
   const wins=pa>pd||hasKw(cr,'slayer'),safe=!(pd>pa||hasKw(t.cr,'slayer'));if(wins&&(safe||pd>=pa-1000)&&pd>bv){bv=pd;best=t}}
  if(best)return best;
- if(ts.some(t=>t.type==='player')){const bl=o.bf.filter(b=>!b.tapped&&hasKw(b,'blocker')&&!rsOk(cr,'unblock',b)&&(!C(b).blkOnly||byOk(C(b).blkOnly,cr))&&!(C(cr).unblockBy&&power(b)<=C(cr).unblockBy));
+ if(ts.some(t=>t.type==='player')){const bl=o.bf.filter(b=>!b.tapped&&hasKw(b,'blocker')&&!rsOk(cr,'unblock',b)&&(!C(b).blkOnly||byOk(C(b).blkOnly,cr))&&!(C(cr).unblockBy&&power(b)<=C(cr).unblockBy)&&!(cr.tmp&&cr.tmp.includes('unb3')&&power(b)<=3000));
   if(!bl.length||o.shields.length===0||bl.every(b=>power(b)<=pa&&!hasKw(b,'slayer')))return {type:'player'}
   /* blockers can each stop only one attack: swarm / bait them instead of idling */
   const left=p.bf.filter(x=>canAttack(p,x)).length;
@@ -1557,5 +1600,5 @@ if(!IS_NODE){
  document.addEventListener('input',e=>{if(e.target.dataset.in==='q'){ui.B.q=e.target.value;ui.B.page=1;const pos=e.target.selectionStart;ui.render();const i=document.querySelector('[data-in=q]');i.focus();i.setSelectionRange(pos,pos)}});
  fetch('cards.json').then(r=>r.json()).then(j=>{CARDS=j;loadDeck();try{ui.cut=localStorage.getItem('dm_cut')!=='0'}catch(e){}ui.render()}).catch(()=>{document.getElementById('app').textContent='Failed to load cards.json'});
 }
-globalThis.__DM={endTurnFx,pickCr,breakShields,hasKw,costOf,stBlk,evoBases,TUT,set cards(v){CARDS=v},startGame,startTurn,autoBuild,randomCivs,get G(){return G},setAuto(v){AUTO=v},ui,aiTurn,canPlay,power,OKP,FX,runFx,destroyCr,enterBf,resolveSpell,playCard,doAttack,battle,canSkill,useSkill,endTurn,canAttack,attackTargetsOf:attackTargets,rsOk,get CARDS(){return CARDS}};
+globalThis.__DM={endTurnFx,pickCr,breakShields,makeCreature,flushQ,hasKw,costOf,stBlk,evoBases,TUT,set cards(v){CARDS=v},startGame,startTurn,autoBuild,randomCivs,get G(){return G},setAuto(v){AUTO=v},ui,aiTurn,canPlay,power,OKP,FX,runFx,destroyCr,enterBf,resolveSpell,playCard,doAttack,battle,canSkill,useSkill,endTurn,canAttack,attackTargetsOf:attackTargets,rsOk,get CARDS(){return CARDS}};
 </script>
