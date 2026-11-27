@@ -197,6 +197,16 @@ p{margin:6px 0}
 .wtop{position:absolute;left:0;right:0;top:0;display:flex;gap:10px;align-items:center;padding:max(10px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px));pointer-events:none}.wtop>*{pointer-events:auto}
 .wb{background:#141828b8;backdrop-filter:blur(6px)}.wnm{display:flex;flex-direction:column;background:#141828b8;border-radius:10px;padding:5px 12px;text-align:left;backdrop-filter:blur(6px)}.wnm span{font-size:12px;color:var(--mut)}
 .wsun{width:46px;height:46px;min-height:46px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;background:#141828c8;border:1px solid #ffffff40;backdrop-filter:blur(6px)}
+.wmks{position:absolute;inset:0;pointer-events:none;overflow:hidden;--s:72px}
+.wmk{position:absolute;left:-999px;top:-999px;width:calc(var(--s)*1.6);transform:translate(-50%,-50%);pointer-events:auto;cursor:pointer;padding:0;border:0;background:none;min-height:0;color:#fff;line-height:0}
+.wmk .ra{position:absolute;inset:-6% -8%;border-radius:50%;background:radial-gradient(ellipse at 50% 55%,color-mix(in srgb,var(--c) 75%,transparent) 0%,color-mix(in srgb,var(--c) 30%,transparent) 45%,transparent 72%);animation:wpulse 2.4s ease-in-out infinite;animation-delay:var(--d,0s);pointer-events:none}
+.wmk img{position:relative;display:block;width:100%;height:auto;-webkit-user-drag:none;transition:transform .15s;animation:wglow 2.4s ease-in-out infinite;animation-delay:var(--d,0s)}
+.wmk:active img{transform:scale(.94)}
+.wmk .lb{position:absolute;left:50%;top:calc(100% - var(--s)*.12);transform:translateX(-50%);text-align:center;white-space:nowrap;background:#0b1226d9;border:1px solid var(--c);border-radius:10px;padding:2px 9px}
+.wmk .lb b{display:block;font-size:max(10px,calc(var(--s)*.17));letter-spacing:.12em;line-height:1.3}.wmk .lb span{display:block;font-size:max(8.5px,calc(var(--s)*.13));color:#b9c8ee;line-height:1.2}
+@keyframes wpulse{0%,100%{opacity:.35;transform:scale(.96)}50%{opacity:1;transform:scale(1.14)}}
+@keyframes wglow{0%,100%{filter:brightness(1) drop-shadow(0 0 4px var(--c))}50%{filter:brightness(1.14) drop-shadow(0 0 14px var(--c))}}
+@media(prefers-reduced-motion:reduce){.wmk .ra,.wmk img{animation:none}.wmk .ra{opacity:.6}}
 .wph{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}.wph button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px}.wph button.on{background:var(--acc);color:#161826;border-color:var(--acc);font-weight:600}.wph button.now{border-color:var(--acc)}
 #menubg{position:fixed;inset:0;z-index:0;background:#050a1c url(menu-bg.jpg) center/cover no-repeat;display:none}#menubg.on{display:block}#menubg canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #app{z-index:1}#app.m{background:transparent}
@@ -1111,6 +1121,7 @@ function wLoop(now){cancelAnimationFrame(WLD.raf);if(!WLD.on||!WLD.ready||docume
  if(cv.width!==cw||cv.height!==ch){cv.width=cw;cv.height=ch}
  const tp=wPhase();if(tp!==WLD.ph){WLD.ph=tp;if(ui.screen==='world')ui.render()}
  const w=WLD.w;let s=0;for(let i=0;i<4;i++){const tg=i===tp?1:0,d=tg-w[i],m=dt/1.6;w[i]+=Math.abs(d)<=m?d:Math.sign(d)*m;s+=w[i]}if(s>0)for(let i=0;i<4;i++)w[i]/=s;
+ wPlaceMk(cv.clientWidth,cv.clientHeight);
  const x=cv.getContext('2d'),k=Math.max(cw/W_W,ch/W_H),ox=(cw-W_W*k)/2,oy=(ch-W_H*k)*.08;
  x.setTransform(1,0,0,1,0,0);x.fillStyle='#161826';x.fillRect(0,0,cw,ch);x.setTransform(k,0,0,k,ox,oy);x.imageSmoothingQuality='high';
  let acc=0;for(let i=0;i<4;i++){acc+=w[i];if(w[i]<.002)continue;const im=WLD.imgs[i],sc=Math.max(W_W/im.naturalWidth,W_H/im.naturalHeight),dw=im.naturalWidth*sc,dh=im.naturalHeight*sc;
@@ -1126,9 +1137,15 @@ function worldBg(on){if(IS_NODE)return;const el=document.getElementById('worldbg
  if(on){wInit();WLD.last=0;WLD.ph=-1;{const t=wPhase();WLD.w=[0,0,0,0];WLD.w[t]=1}if(WLD.ready)wLoop()}else cancelAnimationFrame(WLD.raf)}
 if(!IS_NODE)document.addEventListener('visibilitychange',()=>{if(!document.hidden&&WLD.on&&WLD.ready){WLD.last=0;wLoop()}});
 const wSvg=n=>n?'<svg viewBox="0 0 24 24" width="26" height="26" fill="#cfd8ff"><path d="M21 14.5A9 9 0 0 1 9.5 3 9 9 0 1 0 21 14.5z"/></svg>':'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#ffd36b" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5" fill="#ffd36b"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>';
+/* places: x,y = fraction of the city image (same 16:9 frame as the canvas) */
+const W_PL=[{k:'arena',t:'ARENA',s:'Ranked duels',x:.516,y:.098,c:'#ffc94a',d:'Ranked duels against other players. Coming soon.'},{k:'home',t:'MY HOME',s:'Profile & deck',x:.611,y:.349,c:'#5cb8ff',d:'Your profile, stats and deck. Coming soon.'},{k:'shop',t:'CARD SHOP',s:'Buy & trade',x:.381,y:.525,c:'#b58cff',d:'Buy and trade cards. Coming soon.'},{k:'park',t:'PARK',s:'Casual games',x:.893,y:.145,c:'#58d68d',d:'Relaxed casual games, no rating at stake. Coming soon.'}];
+function wPlaceMk(cwc,chc){const box=document.querySelector('.wmks');if(!box)return;const k=Math.max(cwc/W_W,chc/W_H),ox=(cwc-W_W*k)/2,oy=(chc-W_H*k)*.08,sz=Math.round(Math.max(46,Math.min(80,cwc*.043)));
+ if(box._sz!==sz){box.style.setProperty('--s',sz+'px');box._sz=sz}
+ box.querySelectorAll('.wmk').forEach(e=>{const pl=W_PL[+e.dataset.i],l=Math.round(ox+pl.x*W_W*k),t=Math.round(oy+pl.y*W_H*k);if(e._l!==l||e._t!==t){e.style.left=l+'px';e.style.top=t+'px';e._l=l;e._t=t}})}
 function vWorld(){const x=CAR.profiles.find(q=>q.id===(ui.world&&ui.world.id));const p=wPhase();
  return `<div class="wtop"><button class="wb" data-act="wback">‹ Career</button>${x?`<div class="wnm"><b>${ESC(x.name)}</b><span>Tier ${x.tier} · ELO ${x.elo}</span></div>`:''}<span style="flex:1"></span>
- <button class="wsun" data-act="wset" aria-label="Time of day">${wSvg(p===3)}</button></div>`}
+ <button class="wsun" data-act="wset" aria-label="Time of day">${wSvg(p===3)}</button></div>
+ <div class="wmks">${W_PL.map((q,i)=>`<button class="wmk" data-act="wplace" data-v="${i}" data-i="${i}" style="--c:${q.c};--d:${(i*.5).toFixed(1)}s" aria-label="${q.t}"><span class="ra"></span><img src="city/mk_${q.k}.webp" alt="" draggable="false"><span class="lb"><b>${q.t}</b><span>${q.s}</span></span></button>`).join('')}</div>`}
 /* ---------- tutorial ---------- */
 const TUT={on:false,i:0,steps:[]};
 const tme=()=>G.p[0],thu=id=>{const h=tme().hand.find(x=>x.id===id);return h&&h.uid},tbu=id=>{const c=tme().bf.find(x=>x.id===id);return c&&c.uid},tou=()=>{const c=G.p[1].bf[0];return c&&c.uid};
@@ -1469,6 +1486,7 @@ function vOv(){const o=ui.ov;if(!o)return vZoom();
   <p class="muted" style="margin:6px 0">${WS.auto?`Follows your device clock. Now: <b>${WPN[cl]}</b>.`:'Pick a time of day below, or turn Real time on.'}</p>
   <div class="wph">${WPN.map((n,i)=>`<button class="${!WS.auto&&WS.phase===i?'on':WS.auto&&cl===i?'now':''}" data-act="wph" data-v="${i}">${wSvg(i===3)}<span>${n}</span></button>`).join('')}</div>
   <p class="muted">Morning 05–11 · Noon 11–16 · Afternoon 16–20 · Night 20–05</p></div></div>`}
+ if(o.t==='wsoon'){const q=W_PL[o.i];return `<div class="ov"><div class="zbd" data-act="close"></div><div class="sheet" style="position:relative;border-top:3px solid ${q.c}"><div class="row"><h2 style="flex:1">${q.t}</h2><button data-act="close">Close</button></div><p class="muted">${q.d}</p></div></div>`}
  if(o.t==='cdel'){const x=CAR.profiles.find(q=>q.id===o.id);if(!x)return '';return `<div class="ov"><div class="sheet"><h2>Delete profile?</h2><p>“${ESC(x.name)}” (${x.elo} ELO, ${x.w}W ${x.l}L) and its deck will be removed permanently.</p>
   <div class="row"><button class="bad" data-act="cdelok" data-v="${x.id}">Delete</button><button data-act="close">Cancel</button></div></div></div>`}
  if(o.t==='cprof'){const x=CAR.profiles.find(q=>q.id===o.id);if(!x)return '';const cn={};for(const i of x.deck)cn[i]=(cn[i]||0)+1;
@@ -1520,6 +1538,7 @@ async function onAct(act,el){const d=el.dataset,B=ui.B,me=G&&G.p[0];
  case 'cprof':CAR.last=d.v;carSave();ui.ov={t:'cprof',id:d.v};ui.render();break;
  case 'wenter':CAR.last=d.v;carSave();wLoadSet();ui.world={id:d.v};ui.screen='world';ui.ov=null;ui.render();break;
  case 'wback':ui.screen='menu';ui.sub='career';ui.ov=null;CAR=carLoad();ui.render();break;
+ case 'wplace':ui.ov={t:'wsoon',i:+d.v};ui.render();break;
  case 'wset':ui.ov={t:'wset'};ui.render();break;
  case 'wauto':WS.auto=!WS.auto;if(WS.auto)WS.phase=wClock();wSaveSet();ui.render();break;
  case 'wph':WS.phase=+d.v;WS.auto=false;wSaveSet();ui.render();break;
