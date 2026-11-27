@@ -18,6 +18,7 @@ button:disabled{opacity:.35}
 h1{font-size:30px;margin:0;font-weight:500;letter-spacing:-.025em}h2{font-size:16px;margin:0;font-weight:500}
 .kick{font-size:11px;letter-spacing:.3em;color:var(--a300);font-weight:500}
 #app[data-short] .center{display:grid;grid-template-columns:repeat(2,240px);justify-content:center;align-content:center;gap:8px 12px}#app[data-short] .center>.kick,#app[data-short] .center>h1,#app[data-short] .center>.muted{grid-column:1/-1}#app[data-short] .center h1{font-size:30px;margin:0}#app[data-short] .center button{margin:0}
+.cpl{grid-column:1/-1;justify-self:center;width:100%;max-width:420px;display:flex;flex-direction:column;gap:6px;max-height:44dvh;overflow:auto}.cpr{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 12px}.cpr.on{border-color:var(--acc)}.cpn,.cpe{display:flex;flex-direction:column;gap:2px}.cpe{text-align:right}.cin{width:100%;box-sizing:border-box;font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:6px 0}
 .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center}
 .card{background-repeat:no-repeat;background-color:#0b0d13;border-radius:6%/4.3%;aspect-ratio:403/560}
 .slot{position:relative;flex:none;width:var(--cw);height:var(--ch);transition:width .15s}
@@ -1055,6 +1056,24 @@ function randomCivs(){const a=shuffle([...CIVS]);return a.slice(0,2)}
 function startGame(deck,humanFirst){const d2=autoBuild(randomCivs());
  G={p:[newPlayer(deck,true,0),newPlayer(d2,false,1)],cur:0,turnNo:0,over:false,winner:null,log:[]};
  return G}
+/* ---------- career: profiles + tier-1 starter deck ---------- */
+const CAR_KEY='dm_career',CAR_MAX=8,CAR_START_ELO=1000;
+const tierOf=c=>{if(!c||!c.ok||c.evo)return 3;if(c.cost>5)return 3;if(c.t==='creature'&&(c.p||0)>6000)return 3;
+ if(c.cost<=4&&(c.t!=='creature'||(c.p||0)<=5000))return 1;return 2};
+const tier1Pool=civs=>OKP().filter(c=>tierOf(c)===1&&c.civ.every(v=>civs.includes(v)));
+function careerDeck(civs){const pool=tier1Pool(civs);let best=null;
+ for(let k=0;k<6;k++){const d=autoBuild(civs,pool),cn={};for(const i of d)cn[CARDS[i].n]=(cn[CARDS[i].n]||0)+1;
+  const cr=d.filter(i=>CARDS[i].t==='creature').length,mx=Math.max(...Object.values(cn)),bad=Math.abs(cr-28)+(mx>4?9:0);
+  if(!best||bad<best.bad)best={d,bad}}
+ return best.d}
+function carLoad(){try{const j=JSON.parse(localStorage.getItem(CAR_KEY)||'null');if(j&&Array.isArray(j.profiles))return{last:j.last||null,profiles:j.profiles.filter(x=>x&&x.id&&typeof x.name==='string'&&Array.isArray(x.civs)&&x.civs.length===2&&Array.isArray(x.deck))}}catch(e){}return{last:null,profiles:[]}}
+function carSave(){try{localStorage.setItem(CAR_KEY,JSON.stringify({v:1,last:CAR.last,profiles:CAR.profiles}))}catch(e){}}
+let CAR={last:null,profiles:[]};
+function carCreate(name,civs){name=String(name||'').trim().slice(0,16);
+ if(!name||civs.length!==2||CAR.profiles.length>=CAR_MAX)return null;
+ const pr={id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name,civs:[...civs],elo:CAR_START_ELO,w:0,l:0,tier:1,deck:careerDeck(civs),created:Date.now()};
+ CAR.profiles.push(pr);CAR.last=pr.id;carSave();return pr}
+function carDelete(id){CAR.profiles=CAR.profiles.filter(x=>x.id!==id);if(CAR.last===id)CAR.last=CAR.profiles.length?CAR.profiles[0].id:null;carSave()}
 /* ---------- tutorial ---------- */
 const TUT={on:false,i:0,steps:[]};
 const tme=()=>G.p[0],thu=id=>{const h=tme().hand.find(x=>x.id===id);return h&&h.uid},tbu=id=>{const c=tme().bf.find(x=>x.id===id);return c&&c.uid},tou=()=>{const c=G.p[1].bf[0];return c&&c.uid};
@@ -1238,6 +1257,12 @@ function lodScan(){if(IS_NODE)return;try{if(lodIO)lodIO.disconnect();const els=d
  els.forEach(e=>{if(e.dataset.m==='1')e.dataset.m='0';lodIO.observe(e)})}catch(e){}}
 function vMenu(){const n=ui.B.deck.length;
  const fsb=`${!IS_NODE&&(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen)&&!isStandalone()?'<button style="width:240px" data-act="fs">Full screen</button>':''}`;
+ if(ui.sub==='career'){const ps=CAR.profiles;
+  return `<div class="center mn"><div class="kick">CAREER</div><h1>Profiles</h1><div class="muted">Tier 1 · ELO ${CAR_START_ELO} start</div>
+  <div class="cpl">${ps.map(x=>`<div class="cpr ${x.id===CAR.last?'on':''}" data-act="cprof" data-v="${x.id}"><div class="cpn"><b>${ESC(x.name)}</b><span class="muted">${x.civs.map(c=>CIVN[c]).join(' + ')}</span></div><div class="cpe"><b>${x.elo}</b><span class="muted">ELO · ${x.w}W ${x.l}L</span></div></div>`).join('')||'<p class="muted" style="margin:6px 0">No profile yet. Create one to start your career.</p>'}</div>
+  <button class="bg1" style="width:240px" data-act="cnew" ${ps.length>=CAR_MAX?'disabled':''}>＋ New profile</button>
+  <button class="out" style="width:240px" data-act="menu">‹ Back</button>
+</div>`}
  if(ui.sub==='quick')return `<div class="center mn"><div class="kick">DUEL</div><h1>Quick play</h1><div class="muted">${CARDS.length} cards · ${OKP().length} with working effects</div>
   <button class="bg2" style="width:240px" data-act="quick">Random deck game</button>
   <button style="width:240px" data-act="mydeck" ${n===40?'':'disabled'}>Play with my deck (${n}/40)</button>
@@ -1379,7 +1404,20 @@ function vOv(){const o=ui.ov;if(!o)return vZoom();
   ${arr.length?`<div class="opts">${arr.map(c=>`<div class="opt zc" data-zoom="${c.id}">${cardDiv(c.id)}<span>${ESC(nm(c))}</span>${mn&&c.tapped?'<i class="tg">tapped</i>':''}</div>`).join('')}</div><p class="muted" style="margin-top:8px">Hold a card to zoom.${mn?'':' Newest first.'}</p>`:'<p class="muted" style="margin-top:12px">Empty</p>'}</div></div>`}
  if(o.t==='log')return `<div class="ov" data-act="close"><div class="sheet"><div class="kick" style="margin-bottom:8px">DUEL LOG</div>${G.log.slice().reverse().map(l=>`<div class="li"><span class="n">${ESC(l)}</span></div>`).join('')}</div></div>`
  if(o.t==='installhelp')return `<div class="ov" data-act="close"><div class="sheet"><h2>Install as app</h2><p><b>iPhone / iPad (Safari):</b> tap the Share button, then <b>Add to Home Screen</b>.</p><p><b>Android (Chrome):</b> open the ⋮ menu, then <b>Install app</b> (or <b>Add to Home screen</b>).</p><p><b>Doesn't offer install after you uninstalled it?</b> Chrome pauses the install prompt for a while. Close this tab completely and reopen the link, or use the ⋮ menu → <b>Install app</b>. If it still fails: ⋮ → Settings → Site settings → this site → Clear &amp; reset, then reload.</p><p>The installed app opens full-screen and keeps cards cached for offline play after the first load.</p><div class="row"><button class="pri" data-act="close">OK</button></div></div></div>`
- if(o.t==='career')return `<div class="ov" data-act="close"><div class="sheet"><h2>Play Career</h2><p class="muted">Coming soon — story mode with opponents, rewards and deck progression.</p><div class="row"><button class="pri" data-act="close">OK</button></div></div></div>`;
+  if(o.t==='cnew')return `<div class="ov"><div class="sheet"><h2>New profile</h2><p class="muted">Name your character and pick 2 classes. You get a Tier 1 starter deck.</p>
+  <input class="cin" data-in="cname" maxlength="16" placeholder="Name" value="${ESC(o.name)}" autocomplete="off">
+  <div class="tabs">${CIVS.map(c=>`<button class="${o.sel.includes(c)?'on':''}" data-act="ccivs" data-v="${c}">${CIVN[c]}</button>`).join('')}</div>
+  <p class="muted" style="margin:6px 0">${o.sel.length===2?o.sel.map(c=>CIVN[c]).join(' + '):'Choose 2 classes'}</p>
+  <div class="row"><button class="pri" data-act="ccreate" ${o.name.trim()&&o.sel.length===2?'':'disabled'}>Create</button><button data-act="close">Cancel</button></div></div></div>`;
+ if(o.t==='cdel'){const x=CAR.profiles.find(q=>q.id===o.id);if(!x)return '';return `<div class="ov"><div class="sheet"><h2>Delete profile?</h2><p>“${ESC(x.name)}” (${x.elo} ELO, ${x.w}W ${x.l}L) and its deck will be removed permanently.</p>
+  <div class="row"><button class="bad" data-act="cdelok" data-v="${x.id}">Delete</button><button data-act="close">Cancel</button></div></div></div>`}
+ if(o.t==='cprof'){const x=CAR.profiles.find(q=>q.id===o.id);if(!x)return '';const cn={};for(const i of x.deck)cn[i]=(cn[i]||0)+1;
+  const ids=Object.keys(cn).map(Number).sort((a,b)=>CARDS[a].cost-CARDS[b].cost||CARDS[a].n.localeCompare(CARDS[b].n));
+  return `<div class="ov"><div class="zbd" data-act="close"></div><div class="sheet zsh"><div class="row"><h2 style="flex:1">${ESC(x.name)}</h2><button data-act="close">Close</button></div>
+  <p class="muted">${x.civs.map(c=>CIVN[c]).join(' + ')} · Tier ${x.tier} · ELO ${x.elo} · ${x.w}W ${x.l}L</p>
+  <div class="row" style="margin:6px 0"><button class="bad" data-act="cdel" data-v="${x.id}">Delete profile</button></div>
+  <div class="muted" style="margin:6px 0">Starter deck · ${x.deck.length} cards</div>
+  <div class="opts">${ids.map(i=>`<div class="opt zc" data-zoom="${i}">${cardDiv(i)}<span>${ESC(CARDS[i].n)}</span><i class="tg">×${cn[i]}</i></div>`).join('')}</div><p class="muted" style="margin-top:8px">Hold a card to zoom.</p></div></div>`}
  if(o.t==='rules')return `<div class="ov" data-act="close"><div class="sheet"><h2>Rules (Duel Masters Plays)</h2>
  <p><b>Deck:</b> exactly 40 cards, max 4 copies of the same name. Start with 5 shields and 5 cards in hand. The first player does not draw on their first turn.</p>
  <p><b>Turn order:</b> 1 Draw · 2 Charge mana (once per turn, a card from hand goes to the mana zone) · 3 Play cards · 4 Attack. Mana untaps at the start of your turn.</p>
@@ -1414,7 +1452,13 @@ async function onAct(act,el){const d=el.dataset,B=ui.B,me=G&&G.p[0];
  case 'tplay':TUT.on=false;beginGame(autoBuild(randomCivs()));break;
  case 'menu':TUT.on=false;ui.screen='menu';ui.sub=null;ui.ov=null;ui.render();break;
  case 'quickmenu':ui.sub='quick';ui.render();break;
- case 'career':ui.ov={t:'career'};ui.render();break;
+ case 'career':ui.sub='career';CAR=carLoad();ui.ov=null;ui.render();break;
+ case 'cnew':ui.ov={t:'cnew',name:'',sel:[]};ui.render();break;
+ case 'ccivs':{const s2=ui.ov.sel,k=s2.indexOf(d.v);if(k>=0)s2.splice(k,1);else{s2.push(d.v);if(s2.length>2)s2.shift()}ui.render();break}
+ case 'ccreate':{const o=ui.ov;const pr=carCreate(o.name,o.sel);ui.ov=pr?{t:'cprof',id:pr.id}:null;ui.render();break}
+ case 'cprof':CAR.last=d.v;carSave();ui.ov={t:'cprof',id:d.v};ui.render();break;
+ case 'cdel':ui.ov={t:'cdel',id:d.v};ui.render();break;
+ case 'cdelok':carDelete(d.v);ui.ov=null;ui.render();break;
  case 'builder':loadDeck();ui.screen='builder';ui.render();break;
  case 'cuts':ui.cut=!ui.cut;try{localStorage.setItem('dm_cut',ui.cut?'1':'0')}catch(e){}ui.render();break;
  case 'rules':ui.ov={t:'rules'};ui.render();break;
@@ -1602,8 +1646,9 @@ if(!IS_NODE){
   {const cr=selAtk();if(cr&&!e.target.closest('#hud')&&!e.target.closest('[data-act=sel][data-z=bf]')){const t=hitTarget(cr,toStage(e.clientX,e.clientY));if(t){e.stopPropagation();launch(cr,t);return}}}const el=e.target.closest('[data-act]');if(!el)return;
   if(ui.zoom!=null)return;
   e.stopPropagation();onAct(el.dataset.act,el)});
- document.addEventListener('input',e=>{if(e.target.dataset.in==='q'){ui.B.q=e.target.value;ui.B.page=1;const pos=e.target.selectionStart;ui.render();const i=document.querySelector('[data-in=q]');i.focus();i.setSelectionRange(pos,pos)}});
+ document.addEventListener('input',e=>{if(e.target.dataset.in==='cname'&&ui.ov&&ui.ov.t==='cnew'){ui.ov.name=e.target.value;const b=document.querySelector('[data-act=ccreate]');if(b)b.disabled=!(ui.ov.name.trim()&&ui.ov.sel.length===2);return}
+  if(e.target.dataset.in==='q'){ui.B.q=e.target.value;ui.B.page=1;const pos=e.target.selectionStart;ui.render();const i=document.querySelector('[data-in=q]');i.focus();i.setSelectionRange(pos,pos)}});
  fetch('cards.json').then(r=>r.json()).then(j=>{CARDS=j;loadDeck();try{ui.cut=localStorage.getItem('dm_cut')!=='0'}catch(e){}ui.render()}).catch(()=>{document.getElementById('app').textContent='Failed to load cards.json'});
 }
-globalThis.__DM={endTurnFx,pickCr,breakShields,makeCreature,flushQ,hasKw,costOf,stBlk,evoBases,TUT,set cards(v){CARDS=v},startGame,startTurn,autoBuild,randomCivs,get G(){return G},setAuto(v){AUTO=v},ui,aiTurn,canPlay,power,OKP,FX,runFx,destroyCr,enterBf,resolveSpell,playCard,doAttack,battle,canSkill,useSkill,endTurn,canAttack,attackTargetsOf:attackTargets,rsOk,get CARDS(){return CARDS}};
+globalThis.__DM={tierOf,tier1Pool,careerDeck,carCreate,carDelete,get CAR(){return CAR},set CAR(v){CAR=v},endTurnFx,pickCr,breakShields,makeCreature,flushQ,hasKw,costOf,stBlk,evoBases,TUT,set cards(v){CARDS=v},startGame,startTurn,autoBuild,randomCivs,get G(){return G},setAuto(v){AUTO=v},ui,aiTurn,canPlay,power,OKP,FX,runFx,destroyCr,enterBf,resolveSpell,playCard,doAttack,battle,canSkill,useSkill,endTurn,canAttack,attackTargetsOf:attackTargets,rsOk,get CARDS(){return CARDS}};
 </script>
