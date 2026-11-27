@@ -193,6 +193,11 @@ p{margin:6px 0}
 .vic .vc{position:absolute;left:min(58%,720px,calc(100% - min(50vw,260px) - 16px));bottom:12%;width:50vw;max-width:260px;aspect-ratio:403/560;border-radius:12px;background-repeat:no-repeat;transform:rotate(6deg);box-shadow:0 0 50px var(--a500);opacity:.95;animation:vup .8s .5s both}
 @keyframes vin{from{opacity:0}}@keyframes vup{from{opacity:0;transform:translateY(30px)}}
 
+#worldbg{position:fixed;inset:0;z-index:0;background:#161826;display:none}#worldbg.on{display:block}#worldbg canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.wtop{position:absolute;left:0;right:0;top:0;display:flex;gap:10px;align-items:center;padding:max(10px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) 0 max(12px,env(safe-area-inset-left,0px));pointer-events:none}.wtop>*{pointer-events:auto}
+.wb{background:#141828b8;backdrop-filter:blur(6px)}.wnm{display:flex;flex-direction:column;background:#141828b8;border-radius:10px;padding:5px 12px;text-align:left;backdrop-filter:blur(6px)}.wnm span{font-size:12px;color:var(--mut)}
+.wsun{width:46px;height:46px;min-height:46px;border-radius:50%;padding:0;display:flex;align-items:center;justify-content:center;background:#141828c8;border:1px solid #ffffff40;backdrop-filter:blur(6px)}
+.wph{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}.wph button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px}.wph button.on{background:var(--acc);color:#161826;border-color:var(--acc);font-weight:600}.wph button.now{border-color:var(--acc)}
 #menubg{position:fixed;inset:0;z-index:0;background:#050a1c url(menu-bg.jpg) center/cover no-repeat;display:none}#menubg.on{display:block}#menubg canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #app{z-index:1}#app.m{background:transparent}
 .mn h1,.mn .kick,.mn .muted{text-shadow:0 2px 12px #000,0 0 3px #000}.mn .kick{color:#ffd27a}.mn .muted{color:#b9c8ee}
@@ -202,7 +207,7 @@ p{margin:6px 0}
 .mn button.gr{height:54px;background:url(ui/gr-l.png) left center/auto 100% no-repeat,url(ui/gr-r.png) right center/auto 100% no-repeat,url(ui/gr-m.png) center/calc(100% - 88px) 100% no-repeat}
 .mn button:active:not(:disabled){filter:brightness(1.3)}.mn button:disabled{opacity:.45;filter:saturate(.35)}
 </style>
-<div id="menubg"><canvas></canvas></div><div id="app"></div><div id="ov"></div>
+<div id="menubg"><canvas></canvas></div><div id="worldbg"><canvas></canvas></div><div id="app"></div><div id="ov"></div>
 <script>
 'use strict';
 const IS_NODE=typeof document==='undefined';
@@ -1074,6 +1079,56 @@ function carCreate(name,civs){name=String(name||'').trim().slice(0,16);
  const pr={id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name,civs:[...civs],elo:CAR_START_ELO,w:0,l:0,tier:1,deck:careerDeck(civs),created:Date.now()};
  CAR.profiles.push(pr);CAR.last=pr.id;carSave();return pr}
 function carDelete(id){CAR.profiles=CAR.profiles.filter(x=>x.id!==id);if(CAR.last===id)CAR.last=CAR.profiles.length?CAR.profiles[0].id:null;carSave()}
+/* ---------- career world: animated city, 4 times of day (canvas 2D) ---------- */
+const WLD={on:false,raf:0,ready:false,imgs:[],w:[1,0,0,0],last:0,t0:0,cv:null,spr:{},ph:-1};
+const WPN=['Morning','Noon','Afternoon','Night'],WS={auto:true,phase:0};
+function wLoadSet(){try{const j=JSON.parse(localStorage.getItem('dm_world')||'null');if(j){WS.auto=j.auto!==false;WS.phase=Math.max(0,Math.min(3,Math.floor(+j.phase||0)))}}catch(e){}}
+function wSaveSet(){try{localStorage.setItem('dm_world',JSON.stringify(WS))}catch(e){}}
+const wClock=(d=new Date())=>{const h=d.getHours()+d.getMinutes()/60;return h>=5&&h<11?0:h>=11&&h<16?1:h>=16&&h<20?2:3};
+const wPhase=()=>WS.auto?wClock():WS.phase;
+/* stage 1920x1080; clouds from "Ciclul Zilei": 12 clouds, wander loop P seconds, per-state tint/opacity/shadow */
+const W_W=1920,W_H=1080,W_P=24,W_NCL=8,W_COP=1;
+const W_ST=[{c:[255,214,186],op:.42,sh:.14},{c:[252,252,255],op:.5,sh:.2},{c:[255,200,150],op:.44,sh:.16},{c:[120,130,175],op:.22,sh:0}];
+function wRng(seed){return()=>{seed|=0;seed=(seed+0x6d2b79f5)|0;let t=Math.imul(seed^(seed>>>15),1|seed);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296}}
+const W_CL=(()=>{const r=wRng(7);return Array.from({length:12},()=>{const size=520+r()*520;
+ return{x:-200+r()*(W_W+100),y:-150+r()*(W_H-200),size,ax:160+r()*220,ay:40+r()*70,fx:1+Math.floor(r()*2),fy:1+Math.floor(r()*3),px:r()*6.28,py:r()*6.28,ps:r()*6.28,dir:r()<.5?-1:1,
+  puffs:Array.from({length:5+Math.floor(r()*4)},()=>({x:r()*.7,y:.25+r()*.35,s:.28+r()*.32}))}})})();
+const wWander=(T,amp,f,ph)=>amp*Math.sin(2*Math.PI*f*T/W_P+ph);
+/* one pre-rendered sprite per cloud: tinted cloud (state s 0..3) or shadow (s=4); scale RS keeps memory small */
+function wSprite(i,s){const key=i+'-'+s;if(WLD.spr[key])return WLD.spr[key];const c=W_CL[i],RS=.4,M=90,w=c.size,h=c.size*.55,
+  cv=document.createElement('canvas');cv.width=Math.ceil((w+2*M)*RS);cv.height=Math.ceil((h+2*M)*RS);const x=cv.getContext('2d');
+ const raw=document.createElement('canvas');raw.width=cv.width;raw.height=cv.height;const rx=raw.getContext('2d');rx.scale(RS,RS);rx.translate(M,M);
+ const col=s===4?[20,24,40]:W_ST[s].c,a=s===4?.6:.55;
+ for(const p of c.puffs){const pw=p.s*w,ph=p.s*w*.62;rx.save();rx.translate(p.x*w+pw/2,p.y*h+ph/2);rx.scale(pw/2,ph/2);
+  const g=rx.createRadialGradient(0,0,0,0,0,1);g.addColorStop(0,`rgb(${col})`);g.addColorStop(.55,`rgba(${col},${a})`);g.addColorStop(1,`rgba(${col},0)`);rx.fillStyle=g;rx.fillRect(-1,-1,2,2);rx.restore()}
+ const bx=cv.getContext('2d');if('filter' in bx)bx.filter=`blur(${(s===4?40:22)*RS}px)`;bx.drawImage(raw,0,0);
+ return WLD.spr[key]={e:cv,M,RS}}
+function wInit(){if(WLD.ready||WLD.fail||IS_NODE)return;WLD.cv=document.querySelector('#worldbg canvas');
+ let n=0;['morning','noon','afternoon','night'].forEach((nm,i)=>{const im=new Image();im.onload=()=>{if(++n===4){WLD.ready=true;if(WLD.on){WLD.last=0;wLoop()}}};im.onerror=()=>{WLD.fail=true};im.src='city/'+nm+'.jpg';WLD.imgs[i]=im})}
+function wLoop(now){cancelAnimationFrame(WLD.raf);if(!WLD.on||!WLD.ready||document.hidden)return;WLD.raf=requestAnimationFrame(wLoop);
+ now=now||performance.now();const dt=WLD.last?Math.min(.1,(now-WLD.last)/1000):0;WLD.last=now;if(!WLD.t0)WLD.t0=now;const T=(now-WLD.t0)/1000;
+ const cv=WLD.cv,dpr=Math.min(devicePixelRatio||1,1.5),cw=Math.round(cv.clientWidth*dpr),ch=Math.round(cv.clientHeight*dpr);if(!cw||!ch)return;
+ if(cv.width!==cw||cv.height!==ch){cv.width=cw;cv.height=ch}
+ const tp=wPhase();if(tp!==WLD.ph){WLD.ph=tp;if(ui.screen==='world')ui.render()}
+ const w=WLD.w;let s=0;for(let i=0;i<4;i++){const tg=i===tp?1:0,d=tg-w[i],m=dt/1.6;w[i]+=Math.abs(d)<=m?d:Math.sign(d)*m;s+=w[i]}if(s>0)for(let i=0;i<4;i++)w[i]/=s;
+ const x=cv.getContext('2d'),k=Math.max(cw/W_W,ch/W_H),ox=(cw-W_W*k)/2,oy=(ch-W_H*k)*.08;
+ x.setTransform(1,0,0,1,0,0);x.fillStyle='#161826';x.fillRect(0,0,cw,ch);x.setTransform(k,0,0,k,ox,oy);x.imageSmoothingQuality='high';
+ let acc=0;for(let i=0;i<4;i++){acc+=w[i];if(w[i]<.002)continue;const im=WLD.imgs[i],sc=Math.max(W_W/im.naturalWidth,W_H/im.naturalHeight),dw=im.naturalWidth*sc,dh=im.naturalHeight*sc;
+  x.globalAlpha=Math.min(1,w[i]/acc);x.drawImage(im,(W_W-dw)/2,(W_H-dh)*.08,dw,dh)}x.globalAlpha=1;
+ const shadow=w.reduce((a,v,i)=>a+v*W_ST[i].sh,0);
+ for(let i=0;i<W_NCL;i++){const c=W_CL[i],cx=c.x+c.dir*wWander(T,c.ax,c.fx,c.px)+wWander(T,c.ax*.25,3,c.ps),cy=c.y+wWander(T,c.ay,c.fy,c.py),
+   br=1+.06*Math.sin(2*Math.PI*2*T/W_P+c.ps),dr=(sp,ox2,oy2)=>{x.save();x.translate(cx+ox2,cy+oy2);x.translate(c.size/2,c.size*.275);x.scale(br,br);x.translate(-c.size/2,-c.size*.275);
+    x.drawImage(sp.e,-sp.M,-sp.M,sp.e.width/sp.RS,sp.e.height/sp.RS);x.restore()};
+  if(shadow>.001){x.globalCompositeOperation='multiply';x.globalAlpha=shadow*W_COP;dr(wSprite(i,4),140,220);x.globalCompositeOperation='source-over'}
+  for(let p=0;p<4;p++){const a=w[p]*W_ST[p].op*W_COP;if(a<.004)continue;x.globalAlpha=Math.min(1,a);dr(wSprite(i,p),0,0)}}
+ x.globalAlpha=1}
+function worldBg(on){if(IS_NODE)return;const el=document.getElementById('worldbg');if(!el)return;if(on&&WLD.on)return;el.classList.toggle('on',on);WLD.on=on;
+ if(on){wInit();WLD.last=0;WLD.ph=-1;{const t=wPhase();WLD.w=[0,0,0,0];WLD.w[t]=1}if(WLD.ready)wLoop()}else cancelAnimationFrame(WLD.raf)}
+if(!IS_NODE)document.addEventListener('visibilitychange',()=>{if(!document.hidden&&WLD.on&&WLD.ready){WLD.last=0;wLoop()}});
+const wSvg=n=>n?'<svg viewBox="0 0 24 24" width="26" height="26" fill="#cfd8ff"><path d="M21 14.5A9 9 0 0 1 9.5 3 9 9 0 1 0 21 14.5z"/></svg>':'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#ffd36b" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5" fill="#ffd36b"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>';
+function vWorld(){const x=CAR.profiles.find(q=>q.id===(ui.world&&ui.world.id));const p=wPhase();
+ return `<div class="wtop"><button class="wb" data-act="wback">‹ Career</button>${x?`<div class="wnm"><b>${ESC(x.name)}</b><span>Tier ${x.tier} · ELO ${x.elo}</span></div>`:''}<span style="flex:1"></span>
+ <button class="wsun" data-act="wset" aria-label="Time of day">${wSvg(p===3)}</button></div>`}
 /* ---------- tutorial ---------- */
 const TUT={on:false,i:0,steps:[]};
 const tme=()=>G.p[0],thu=id=>{const h=tme().hand.find(x=>x.id===id);return h&&h.uid},tbu=id=>{const c=tme().bf.find(x=>x.id===id);return c&&c.uid},tou=()=>{const c=G.p[1].bf[0];return c&&c.uid};
@@ -1150,8 +1205,8 @@ const ui={fx:async()=>{},fxNow(){},cut:true,screen:'menu',sel:null,ov:null,busy:
  choose(title,opts,none){return new Promise(res=>{ui.ov={t:'choose',title,opts,none};ui.chooseRes=res;ui.render()})},
  render(){if(IS_NODE)return;
   const a=document.getElementById('app');
-  if(ui.screen==='game'){tutCheck();boardRender()}else{a.className=ui.screen==='menu'?'m':'';a.innerHTML=ui.screen==='menu'?vMenu():vBuilder()}
-  menuBg(ui.screen==='menu');
+  if(ui.screen==='game'){tutCheck();boardRender()}else{a.className=ui.screen==='menu'||ui.screen==='world'?'m':'';a.innerHTML=ui.screen==='menu'?vMenu():ui.screen==='world'?vWorld():vBuilder()}
+  menuBg(ui.screen==='menu');worldBg(ui.screen==='world');
   setOv();ovFit();tutDecorate();lodScan()}};
 function setOv(){const o=document.getElementById('ov');if(!o)return;const h=vOv()+(ui.ov?vZoom():'')+coachHtml();if(o._h!==h){o._h=h;o.innerHTML=h}}
 
@@ -1318,7 +1373,7 @@ function ovFit(){const o=document.getElementById('ov');if(!o)return;const w=inne
  if(pt){o.className='rotp';o.style.cssText=`position:fixed;left:0;top:0;width:${h}px;height:${w}px;transform-origin:0 0;transform:${fl?`translate(0,${h}px) rotate(-90deg)`:`translate(${w}px,0) rotate(90deg)`};z-index:40`}
  else{o.className='';o.style.cssText=''}
  if(ap){ap.toggleAttribute('data-short',(pt?w:h)<520);if(pt&&ui.screen!=='game')ap.style.cssText=`inset:auto;left:0;top:0;width:${h}px;height:${w}px;transform-origin:0 0;transform:translate(${w}px,0) rotate(90deg)`;else ap.style.cssText=''}
- const mb=document.getElementById('menubg');if(mb){if(pt)mb.style.cssText=`inset:auto;left:0;top:0;width:${h}px;height:${w}px;transform-origin:0 0;transform:translate(${w}px,0) rotate(90deg)`;else mb.style.cssText=''}}
+ for(const id of ['menubg','worldbg']){const mb=document.getElementById(id);if(mb){if(pt)mb.style.cssText=`inset:auto;left:0;top:0;width:${h}px;height:${w}px;transform-origin:0 0;transform:translate(${w}px,0) rotate(90deg)`;else mb.style.cssText=''}}}
 function boardFit(){ovFit();const st=document.getElementById('stage');if(!st)return;const w=innerWidth,h=innerHeight;
  if(h>w*1.05){const k=Math.min(h/1920,w/1080),f=board.flip;
   st.style.transform=f?`translate(${(w-1080*k)/2}px,${(h+1920*k)/2}px) rotate(-90deg) scale(${k})`:`translate(${(w+1080*k)/2}px,${(h-1920*k)/2}px) rotate(90deg) scale(${k})`;board.k=k}
@@ -1409,12 +1464,18 @@ function vOv(){const o=ui.ov;if(!o)return vZoom();
   <div class="tabs">${CIVS.map(c=>`<button class="${o.sel.includes(c)?'on':''}" data-act="ccivs" data-v="${c}">${CIVN[c]}</button>`).join('')}</div>
   <p class="muted" style="margin:6px 0">${o.sel.length===2?o.sel.map(c=>CIVN[c]).join(' + '):'Choose 2 classes'}</p>
   <div class="row"><button class="pri" data-act="ccreate" ${o.name.trim()&&o.sel.length===2?'':'disabled'}>Create</button><button data-act="close">Cancel</button></div></div></div>`;
+ if(o.t==='wset'){const cl=wClock();return `<div class="ov"><div class="zbd" data-act="close"></div><div class="sheet" style="position:relative"><div class="row"><h2 style="flex:1">Time of day</h2><button data-act="close">Close</button></div>
+  <button class="${WS.auto?'pri':''}" style="width:100%;margin-top:6px" data-act="wauto">Real time: ${WS.auto?'On':'Off'}</button>
+  <p class="muted" style="margin:6px 0">${WS.auto?`Follows your device clock. Now: <b>${WPN[cl]}</b>.`:'Pick a time of day below, or turn Real time on.'}</p>
+  <div class="wph">${WPN.map((n,i)=>`<button class="${!WS.auto&&WS.phase===i?'on':WS.auto&&cl===i?'now':''}" data-act="wph" data-v="${i}">${wSvg(i===3)}<span>${n}</span></button>`).join('')}</div>
+  <p class="muted">Morning 05–11 · Noon 11–16 · Afternoon 16–20 · Night 20–05</p></div></div>`}
  if(o.t==='cdel'){const x=CAR.profiles.find(q=>q.id===o.id);if(!x)return '';return `<div class="ov"><div class="sheet"><h2>Delete profile?</h2><p>“${ESC(x.name)}” (${x.elo} ELO, ${x.w}W ${x.l}L) and its deck will be removed permanently.</p>
   <div class="row"><button class="bad" data-act="cdelok" data-v="${x.id}">Delete</button><button data-act="close">Cancel</button></div></div></div>`}
  if(o.t==='cprof'){const x=CAR.profiles.find(q=>q.id===o.id);if(!x)return '';const cn={};for(const i of x.deck)cn[i]=(cn[i]||0)+1;
   const ids=Object.keys(cn).map(Number).sort((a,b)=>CARDS[a].cost-CARDS[b].cost||CARDS[a].n.localeCompare(CARDS[b].n));
   return `<div class="ov"><div class="zbd" data-act="close"></div><div class="sheet zsh"><div class="row"><h2 style="flex:1">${ESC(x.name)}</h2><button data-act="close">Close</button></div>
   <p class="muted">${x.civs.map(c=>CIVN[c]).join(' + ')} · Tier ${x.tier} · ELO ${x.elo} · ${x.w}W ${x.l}L</p>
+  <button class="pri" style="width:100%;min-height:48px;font-size:17px;letter-spacing:.06em;margin:4px 0" data-act="wenter" data-v="${x.id}">ENTER WORLD</button>
   <div class="row" style="margin:6px 0"><button class="bad" data-act="cdel" data-v="${x.id}">Delete profile</button></div>
   <div class="muted" style="margin:6px 0">Starter deck · ${x.deck.length} cards</div>
   <div class="opts">${ids.map(i=>`<div class="opt zc" data-zoom="${i}">${cardDiv(i)}<span>${ESC(CARDS[i].n)}</span><i class="tg">×${cn[i]}</i></div>`).join('')}</div><p class="muted" style="margin-top:8px">Hold a card to zoom.</p></div></div>`}
@@ -1457,6 +1518,11 @@ async function onAct(act,el){const d=el.dataset,B=ui.B,me=G&&G.p[0];
  case 'ccivs':{const s2=ui.ov.sel,k=s2.indexOf(d.v);if(k>=0)s2.splice(k,1);else{s2.push(d.v);if(s2.length>2)s2.shift()}ui.render();break}
  case 'ccreate':{const o=ui.ov;const pr=carCreate(o.name,o.sel);ui.ov=pr?{t:'cprof',id:pr.id}:null;ui.render();break}
  case 'cprof':CAR.last=d.v;carSave();ui.ov={t:'cprof',id:d.v};ui.render();break;
+ case 'wenter':CAR.last=d.v;carSave();wLoadSet();ui.world={id:d.v};ui.screen='world';ui.ov=null;ui.render();break;
+ case 'wback':ui.screen='menu';ui.sub='career';ui.ov=null;CAR=carLoad();ui.render();break;
+ case 'wset':ui.ov={t:'wset'};ui.render();break;
+ case 'wauto':WS.auto=!WS.auto;if(WS.auto)WS.phase=wClock();wSaveSet();ui.render();break;
+ case 'wph':WS.phase=+d.v;WS.auto=false;wSaveSet();ui.render();break;
  case 'cdel':ui.ov={t:'cdel',id:d.v};ui.render();break;
  case 'cdelok':carDelete(d.v);ui.ov=null;ui.render();break;
  case 'builder':loadDeck();ui.screen='builder';ui.render();break;
@@ -1650,5 +1716,5 @@ if(!IS_NODE){
   if(e.target.dataset.in==='q'){ui.B.q=e.target.value;ui.B.page=1;const pos=e.target.selectionStart;ui.render();const i=document.querySelector('[data-in=q]');i.focus();i.setSelectionRange(pos,pos)}});
  fetch('cards.json').then(r=>r.json()).then(j=>{CARDS=j;loadDeck();try{ui.cut=localStorage.getItem('dm_cut')!=='0'}catch(e){}ui.render()}).catch(()=>{document.getElementById('app').textContent='Failed to load cards.json'});
 }
-globalThis.__DM={tierOf,tier1Pool,careerDeck,carCreate,carDelete,get CAR(){return CAR},set CAR(v){CAR=v},endTurnFx,pickCr,breakShields,makeCreature,flushQ,hasKw,costOf,stBlk,evoBases,TUT,set cards(v){CARDS=v},startGame,startTurn,autoBuild,randomCivs,get G(){return G},setAuto(v){AUTO=v},ui,aiTurn,canPlay,power,OKP,FX,runFx,destroyCr,enterBf,resolveSpell,playCard,doAttack,battle,canSkill,useSkill,endTurn,canAttack,attackTargetsOf:attackTargets,rsOk,get CARDS(){return CARDS}};
+globalThis.__DM={wClock,wPhase,WS,tierOf,tier1Pool,careerDeck,carCreate,carDelete,get CAR(){return CAR},set CAR(v){CAR=v},endTurnFx,pickCr,breakShields,makeCreature,flushQ,hasKw,costOf,stBlk,evoBases,TUT,set cards(v){CARDS=v},startGame,startTurn,autoBuild,randomCivs,get G(){return G},setAuto(v){AUTO=v},ui,aiTurn,canPlay,power,OKP,FX,runFx,destroyCr,enterBf,resolveSpell,playCard,doAttack,battle,canSkill,useSkill,endTurn,canAttack,attackTargetsOf:attackTargets,rsOk,get CARDS(){return CARDS}};
 </script>
